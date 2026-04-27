@@ -3,45 +3,77 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  static const Color background = Color(0xFFF7FCF5);
-  static const Color surface = Colors.white;
+  // Main Tiffany Colors
+  static const Color primary = Color(0xFF00BFA6);
+  static const Color primaryDark = Color(0xFF007F73);
+  static const Color primaryDeep = Color(0xFF004E48);
+  static const Color primaryLight = Color(0xFFD8FFF8);
+  static const Color primarySoft = Color(0xFFEFFFFC);
 
-  static const Color primaryLight = Color(0xFFD9F2D0);
-  static const Color primary = Color(0xFF8BCF95);
-  static const Color primaryDark = Color(0xFF244D2C);
+  // Accent Colors
+  static const Color accent = Color(0xFFFFD166);
+  static const Color accentSoft = Color(0xFFFFF4D6);
 
-  static const Color secondary = Color(0xFFA8E6B0);
-  static const Color accent = Color(0xFF6DBB7A);
+  // Backgrounds
+  static const Color background = Color(0xFFF3FFFD);
+  static const Color backgroundDeep = Color(0xFFE4FAF6);
+  static const Color surface = Color(0xFFFFFFFF);
+  static const Color surfaceTint = Color(0xFFEFFFFC);
+  static const Color inputFill = Color(0xFFF7FFFD);
 
-  static const Color textPrimary = Color(0xFF244D2C);
-  static const Color textSecondary = Color(0xFF4F6F55);
-  static const Color textMuted = Color(0xFF7C9782);
+  // Text
+  static const Color textPrimary = Color(0xFF082C2A);
+  static const Color textSecondary = Color(0xFF355F5A);
+  static const Color textMuted = Color(0xFF7E9A96);
 
-  static const Color border = Color(0xFFD9F2D0);
-  static const Color inputFill = Color(0xFFF9FDF8);
+  // Border / Shadow
+  static const Color border = Color(0xFFC9F2EC);
+  static const Color borderStrong = Color(0xFF8BE4DA);
+  static const Color shadow = Color(0x26007F73);
 
-  static const Color success = Color(0xFF2E7D32);
-  static const Color warning = Color(0xFFE6A700);
-  static const Color error = Color(0xFFD32F2F);
-  static const Color info = Color(0xFF1976D2);
+  // Status
+  static const Color success = Color(0xFF17B26A);
+  static const Color warning = Color(0xFFF79009);
+  static const Color error = Color(0xFFE5484D);
 
-  static const Color shadow = Color(0x14244D2C);
-
+  // Gradients
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [
-      Color(0xFFD9F2D0),
-      Color(0xFF8BCF95),
-    ],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
+    colors: [
+      Color(0xFF00D9C0),
+      Color(0xFF00BFA6),
+      Color(0xFF007F73),
+    ],
   );
 
-  static const LinearGradient darkGreenGradient = LinearGradient(
+  static const LinearGradient softBackgroundGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
     colors: [
-      Color(0xFF2F5E37),
-      Color(0xFF244D2C),
+      Color(0xFFEFFFFC),
+      Color(0xFFF8FFFE),
+      Color(0xFFFFFFFF),
     ],
+  );
+
+  static const LinearGradient premiumGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
+    colors: [
+      Color(0xFFFFFFFF),
+      Color(0xFFEFFFFC),
+      Color(0xFFD8FFF8),
+    ],
+  );
+
+  static const LinearGradient darkTiffanyGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFF004E48),
+      Color(0xFF007F73),
+      Color(0xFF00BFA6),
+    ],
   );
 }

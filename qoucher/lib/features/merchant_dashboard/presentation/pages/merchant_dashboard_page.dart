@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:qoucher/features/merchant_dashboard/data/repositories/merchant_dashboard_repository.dart';
 
@@ -7,7 +8,6 @@ import 'package:qoucher/features/merchant_dashboard/domain/usecases/assign_point
 import 'package:qoucher/features/merchant_dashboard/domain/usecases/create_merchant_action.dart';
 import 'package:qoucher/features/merchant_dashboard/domain/usecases/get_active_actions.dart';
 import 'package:qoucher/features/merchant_dashboard/domain/usecases/get_archived_actions.dart';
-import 'package:qoucher/features/merchant_dashboard/domain/usecases/get_merchant_dashboard_data.dart';
 import 'package:qoucher/features/merchant_dashboard/domain/usecases/get_scanned_history.dart';
 import 'package:qoucher/features/merchant_dashboard/domain/usecases/pause_merchant_action.dart';
 import 'package:qoucher/features/merchant_dashboard/domain/usecases/redeem_reward.dart';
@@ -20,18 +20,15 @@ import 'package:qoucher/features/merchant_dashboard/presentation/controllers/mer
 import 'package:qoucher/features/merchant_dashboard/presentation/controllers/merchant_points_controller.dart';
 import 'package:qoucher/features/merchant_dashboard/presentation/controllers/merchant_profile_controller.dart';
 import 'package:qoucher/features/merchant_dashboard/presentation/controllers/merchant_qr_controller.dart';
-import 'package:qoucher/features/merchant_dashboard/presentation/controllers/merchant_rewards_controller.dart';
 import 'package:qoucher/features/merchant_dashboard/presentation/controllers/merchant_shop_controller.dart';
 import 'package:qoucher/features/merchant_dashboard/presentation/controllers/merchant_stamp_controller.dart';
 
-import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_actions_page.dart';
 import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_archived_actions_page.dart';
 import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_create_action_page.dart';
 import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_items_page.dart';
 import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_points_system_page.dart';
 import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_profile_page.dart';
 import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_qr_scanner_page.dart';
-import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_rewards_page.dart';
 import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_scanned_history_page.dart';
 import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_shop_page.dart';
 import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_stamp_system_page.dart';
@@ -66,11 +63,17 @@ class _MerchantDashboardPageState extends State<MerchantDashboardPage> {
     return Consumer<MerchantDashboardController>(
       builder: (context, controller, _) {
         final shopName = controller.businessName;
-        final pointsPerEuro = 1.0;
+        const pointsPerEuro = 1.0;
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Merchant Dashboard'),
+            title: const Text('Dashboard'),
+            actions: [
+              IconButton(
+                onPressed: () => _openProfilePage(context),
+                icon: const Icon(Icons.settings_outlined),
+              ),
+            ],
           ),
           body: controller.isLoading
               ? const Center(child: CircularProgressIndicator())
@@ -83,6 +86,7 @@ class _MerchantDashboardPageState extends State<MerchantDashboardPage> {
                   context,
                   businessName: shopName,
                 ),
+
                 const SizedBox(height: 18),
 
                 _buildPrimaryScannerCard(
@@ -92,6 +96,27 @@ class _MerchantDashboardPageState extends State<MerchantDashboardPage> {
                     pointsPerEuro: pointsPerEuro,
                   ),
                 ),
+
+                const SizedBox(height: 16),
+
+                _wideSystemTile(
+                  context,
+                  title: 'Punktesystem',
+                  subtitle: 'Punkte pro € festlegen und Kunden automatisch belohnen',
+                  icon: Icons.stars_outlined,
+                  onTap: () => _openPointsPage(context),
+                ),
+
+                const SizedBox(height: 12),
+
+                _wideSystemTile(
+                  context,
+                  title: 'Stempelkarte',
+                  subtitle: 'Digitale Karte für Besuche, Käufe oder Aktionen',
+                  icon: Icons.style_outlined,
+                  onTap: () => _openStampPage(context),
+                ),
+
                 const SizedBox(height: 16),
 
                 Row(
@@ -99,123 +124,169 @@ class _MerchantDashboardPageState extends State<MerchantDashboardPage> {
                     Expanded(
                       child: _statCard(
                         context,
-                        'Aktive Aktionen',
-                        '${controller.activeActionsCount}',
-                        Icons.campaign_outlined,
+                        title: 'Aktive Aktionen',
+                        value: '${controller.activeActionsCount}',
+                        icon: Icons.local_fire_department_outlined,
+                        onTap: () => _showActiveActionsPopup(context),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _statCard(
                         context,
-                        'Archiv',
-                        '${controller.archivedActionsCount}',
-                        Icons.archive_outlined,
+                        title: 'Gescannt heute',
+                        value: '${controller.scannedTodayCount}',
+                        icon: Icons.qr_code_2_outlined,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                _statCard(
-                  context,
-                  'Gescannt heute',
-                  '${controller.scannedTodayCount}',
-                  Icons.history,
-                ),
-                const SizedBox(height: 20),
 
-                Text(
-                  'Verwalten',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                GridView.count(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  childAspectRatio: 1.10,
-                  children: [
-                    _dashboardTile(
-                      context,
-                      title: 'Neue Aktion',
-                      icon: Icons.add_circle_outline,
-                      subtitle: 'Aktion starten',
-                      onTap: () => _openCreateActionPage(
-                        context,
-                        shopName: shopName,
-                      ),
-                    ),
-                    _dashboardTile(
-                      context,
-                      title: 'Aktive Aktionen',
-                      icon: Icons.flash_on_outlined,
-                      subtitle: 'Laufende Aktionen',
-                      onTap: () => _openActionsPage(context),
-                    ),
-                    _dashboardTile(
-                      context,
-                      title: 'Archiv',
-                      icon: Icons.archive_outlined,
-                      subtitle: 'Deaktivierte Aktionen',
-                      onTap: () => _openArchivedActionsPage(context),
-                    ),
-                    _dashboardTile(
-                      context,
-                      title: 'Gescannt heute',
-                      icon: Icons.qr_code_2_outlined,
-                      subtitle: 'Scan-Verlauf',
-                      onTap: () => _openScannedHistoryPage(context),
-                    ),
-                    _dashboardTile(
-                      context,
-                      title: 'Meine Artikel',
-                      icon: Icons.inventory_2_outlined,
-                      subtitle: 'Produkte verwalten',
-                      onTap: () => _openItemsPage(context),
-                    ),
-                    _dashboardTile(
-                      context,
-                      title: 'Rewards',
-                      icon: Icons.card_giftcard,
-                      subtitle: 'Belohnungen',
-                      onTap: () => _openRewardsPage(context),
-                    ),
-                    _dashboardTile(
-                      context,
-                      title: 'Punktesystem',
-                      icon: Icons.stars_outlined,
-                      subtitle: 'Punkte pro €',
-                      onTap: () => _openPointsPage(context),
-                    ),
-                    _dashboardTile(
-                      context,
-                      title: 'Stempelsystem',
-                      icon: Icons.style_outlined,
-                      subtitle: 'Digitale Stempelkarten',
-                      onTap: () => _openStampPage(context),
-                    ),
-                    _dashboardTile(
-                      context,
-                      title: 'Mein Shop',
-                      icon: Icons.storefront_outlined,
-                      subtitle: 'Öffentliche Ansicht',
-                      onTap: () => _openShopPage(context),
-                    ),
-                    _dashboardTile(
-                      context,
-                      title: 'Profil',
-                      icon: Icons.person_outline,
-                      subtitle: 'Shopdaten',
-                      onTap: () => _openProfilePage(context),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 24),
+
+                _sectionTitle(context, 'Aktionen'),
+                const SizedBox(height: 12),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: _gridTile(
+                        context,
+                        title: 'Rabatt-Aktion',
+                        icon: Icons.percent,
+                        onTap: () => _openCreateActionPage(
+                          context,
+                          shopName: shopName,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _gridTile(
+                        context,
+                        title: '2 für 1 / 2+1',
+                        icon: Icons.local_offer_outlined,
+                        onTap: () => _openCreateActionPage(
+                          context,
+                          shopName: shopName,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 12),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: _gridTile(
+                        context,
+                        title: 'Gratis Coupon',
+                        icon: Icons.card_giftcard_outlined,
+                        onTap: () => _openCreateActionPage(
+                          context,
+                          shopName: shopName,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _gridTile(
+                        context,
+                        title: 'Happy Hour',
+                        icon: Icons.access_time_filled_outlined,
+                        onTap: () => _openCreateActionPage(
+                          context,
+                          shopName: shopName,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 12),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: _gridTile(
+                        context,
+                        title: 'Individueller Beitrag',
+                        icon: Icons.edit_note_outlined,
+                        onTap: () => _openCreateActionPage(
+                          context,
+                          shopName: shopName,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _gridTile(
+                        context,
+                        title: 'MHD-Ware',
+                        icon: Icons.schedule_outlined,
+                        onTap: () => _openCreateActionPage(
+                          context,
+                          shopName: shopName,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 24),
+
+                _sectionTitle(context, 'Verwaltung'),
+                const SizedBox(height: 12),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: _gridTile(
+                        context,
+                        title: 'Meine Artikel',
+                        icon: Icons.inventory_2_outlined,
+                        onTap: () => _openItemsPage(context),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _gridTile(
+                        context,
+                        title: 'Öffentlicher Shop',
+                        icon: Icons.storefront_outlined,
+                        onTap: () => _openShopPage(context),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 12),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: _gridTile(
+                        context,
+                        title: 'Scans heute',
+                        icon: Icons.history,
+                        onTap: () => _openScannedHistoryPage(context),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _gridTile(
+                        context,
+                        title: 'Ausloggen',
+                        icon: Icons.logout,
+                        onTap: () => _logout(context),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 28),
               ],
             ),
           ),
@@ -302,15 +373,15 @@ class _MerchantDashboardPageState extends State<MerchantDashboardPage> {
         child: Row(
           children: [
             Container(
-              width: 68,
-              height: 68,
+              width: 72,
+              height: 72,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
                 color: Theme.of(context).colorScheme.primary.withOpacity(0.16),
               ),
               child: Icon(
                 Icons.qr_code_scanner,
-                size: 36,
+                size: 38,
                 color: Theme.of(context).colorScheme.primary,
               ),
             ),
@@ -327,13 +398,12 @@ class _MerchantDashboardPageState extends State<MerchantDashboardPage> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Kunde laden, Punkte vergeben, Rewards einlösen.',
+                    'Kundenkarte scannen, Punkte vergeben oder Coupon prüfen.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 12),
             const Icon(Icons.arrow_forward_ios_rounded, size: 18),
           ],
         ),
@@ -342,47 +412,113 @@ class _MerchantDashboardPageState extends State<MerchantDashboardPage> {
   }
 
   Widget _statCard(
-      BuildContext context,
-      String title,
-      String value,
-      IconData icon,
-      ) {
-    return Card(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
+      BuildContext context, {
+        required String title,
+        required String value,
+        required IconData icon,
+        VoidCallback? onTap,
+      }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Card(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(icon),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title),
+                    const SizedBox(height: 6),
+                    Text(
+                      value,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    );
+  }
+
+  Widget _sectionTitle(BuildContext context, String title) {
+    return Text(
+      title,
+      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+
+  Widget _wideSystemTile(
+      BuildContext context, {
+        required String title,
+        required String subtitle,
+        required IconData icon,
+        required VoidCallback onTap,
+      }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          color: Theme.of(context).colorScheme.primary.withOpacity(0.07),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.primary.withOpacity(0.20),
+          ),
+        ),
         child: Row(
           children: [
-            Icon(icon),
-            const SizedBox(width: 12),
+            Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.13),
+              ),
+              child: Icon(icon, size: 30),
+            ),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title),
-                  const SizedBox(height: 6),
                   Text(
-                    value,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    title,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
                   ),
+                  const SizedBox(height: 6),
+                  Text(subtitle),
                 ],
               ),
             ),
+            const Icon(Icons.arrow_forward_ios_rounded, size: 18),
           ],
         ),
       ),
     );
   }
 
-  Widget _dashboardTile(
+  Widget _gridTile(
       BuildContext context, {
         required String title,
         required IconData icon,
-        required String subtitle,
         required VoidCallback onTap,
       }) {
     return InkWell(
@@ -392,32 +528,107 @@ class _MerchantDashboardPageState extends State<MerchantDashboardPage> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 34),
-              const SizedBox(height: 12),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 15,
+        child: SizedBox(
+          height: 118,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 34),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  void _showActiveActionsPopup(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(24),
+        ),
+      ),
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Aktive Aktionen',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              _popupActionRow(
+                context,
+                title: 'Babel Deal',
+                subtitle: '10% Rabatt auf ausgewählte Artikel',
+                icon: Icons.local_fire_department_outlined,
+              ),
+              _popupActionRow(
+                context,
+                title: 'Happy Hour',
+                subtitle: 'Heute aktiv',
+                icon: Icons.access_time_outlined,
+              ),
+              _popupActionRow(
+                context,
+                title: 'Stempelkarte',
+                subtitle: 'Jeder 10. Besuch bekommt Bonus',
+                icon: Icons.style_outlined,
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                'Nur Übersicht. Bearbeitung kommt später.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _popupActionRow(
+      BuildContext context, {
+        required String title,
+        required String subtitle,
+        required IconData icon,
+      }) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(
+        title,
+        style: const TextStyle(fontWeight: FontWeight.w800),
+      ),
+      subtitle: Text(subtitle),
+    );
+  }
+
+  Future<void> _logout(BuildContext context) async {
+    await FirebaseAuth.instance.signOut();
+
+    if (!context.mounted) return;
+
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   void _openQrScannerPage(
@@ -436,23 +647,6 @@ class _MerchantDashboardPageState extends State<MerchantDashboardPage> {
           child: MerchantQrScannerPage(
             merchantId: widget.merchantId,
             pointsPerEuro: pointsPerEuro,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _openActionsPage(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ChangeNotifierProvider(
-          create: (_) => MerchantActionsController(
-            getActiveActions: GetActiveActions(_repository),
-            getArchivedActions: GetArchivedActions(_repository),
-            pauseMerchantAction: PauseMerchantAction(_repository),
-          ),
-          child: MerchantActionsPage(
-            merchantId: widget.merchantId,
           ),
         ),
       ),
@@ -521,21 +715,6 @@ class _MerchantDashboardPageState extends State<MerchantDashboardPage> {
             repository: _repository,
           ),
           child: MerchantItemsPage(
-            merchantId: widget.merchantId,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _openRewardsPage(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ChangeNotifierProvider(
-          create: (_) => MerchantRewardsController(
-            repository: _repository,
-          ),
-          child: MerchantRewardsPage(
             merchantId: widget.merchantId,
           ),
         ),

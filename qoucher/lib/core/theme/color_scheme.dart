@@ -6,13 +6,39 @@ class AppColorScheme {
 
   static const ColorScheme light = ColorScheme(
     brightness: Brightness.light,
-    primary: AppColors.primaryDark,
+
+    primary: AppColors.primary,
     onPrimary: Colors.white,
-    secondary: AppColors.primary,
-    onSecondary: AppColors.primaryDark,
+
+    primaryContainer: AppColors.primaryLight,
+    onPrimaryContainer: AppColors.primaryDeep,
+
+    secondary: AppColors.accent,
+    onSecondary: AppColors.primaryDeep,
+
+    secondaryContainer: AppColors.accentSoft,
+    onSecondaryContainer: AppColors.primaryDeep,
+
+    tertiary: AppColors.primaryDark,
+    onTertiary: Colors.white,
+
     error: AppColors.error,
     onError: Colors.white,
+
     surface: AppColors.surface,
     onSurface: AppColors.textPrimary,
+
+    surfaceContainerHighest: AppColors.primarySoft,
+    onSurfaceVariant: AppColors.textSecondary,
+
+    outline: AppColors.border,
+    outlineVariant: AppColors.borderStrong,
+
+    shadow: AppColors.shadow,
+    scrim: Colors.black54,
+
+    inverseSurface: AppColors.primaryDeep,
+    onInverseSurface: Colors.white,
+    inversePrimary: AppColors.primaryLight,
   );
 }
