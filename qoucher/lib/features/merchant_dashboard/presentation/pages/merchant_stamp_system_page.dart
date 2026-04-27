@@ -20,7 +20,7 @@ class StampCardDraft {
       isEnabled: data['isEnabled'] ?? false,
       isPublic: data['isPublic'] ?? true,
       stampCount: data['stampCount'] ?? 10,
-      previewCollectedStamps: 0,
+      previewCollectedStamps: 2,
       triggerType: data['triggerType'] ?? 'per_visit',
       triggerLabel: data['triggerLabel'] ?? 'Pro Besuch',
       rewardTitle: data['rewardTitle'] ?? 'Belohnung',
@@ -94,16 +94,22 @@ class StampCardDraft {
     return {
       'id': id,
       'merchantId': merchantId,
+
       'title': title,
       'description': description,
+
       'isEnabled': isEnabled,
       'isPublic': isPublic,
+
       'stampCount': stampCount,
+
       'triggerType': triggerType,
       'triggerLabel': triggerLabel,
+
       'rewardTitle': rewardTitle,
       'rewardDescription': rewardDescription,
       'autoRewardEnabled': autoRewardEnabled,
+
       'design': {
         'theme': themeName,
         'lookMode': lookMode,
@@ -112,7 +118,8 @@ class StampCardDraft {
         'iconFontFamily': iconFontFamily,
         'fontStyle': fontStyle,
       },
-      'updatedAt': DateTime.now(),
+
+      'updatedAt': FieldValue.serverTimestamp(),
     };
   }
 
@@ -284,12 +291,22 @@ class _MerchantStampSystemPageState extends State<MerchantStampSystemPage> {
     setState(() => isLoading = true);
 
     try {
-      final snapshot = await _firestore
-          .collection('merchants')
-          .doc(widget.merchantId)
-          .collection('stampCards')
-          .orderBy('updatedAt', descending: true)
-          .get();
+      QuerySnapshot<Map<String, dynamic>> snapshot;
+
+      try {
+        snapshot = await _firestore
+            .collection('merchants')
+            .doc(widget.merchantId)
+            .collection('stampCards')
+            .orderBy('updatedAt', descending: true)
+            .get();
+      } catch (_) {
+        snapshot = await _firestore
+            .collection('merchants')
+            .doc(widget.merchantId)
+            .collection('stampCards')
+            .get();
+      }
 
       stampCards.clear();
 
@@ -314,11 +331,13 @@ class _MerchantStampSystemPageState extends State<MerchantStampSystemPage> {
         stampCards.add(_defaultStampCard());
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Stempelkarten konnten nicht geladen werden'),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Stempelkarten konnten nicht geladen werden'),
+          ),
+        );
+      }
     }
 
     if (mounted) {
@@ -327,16 +346,24 @@ class _MerchantStampSystemPageState extends State<MerchantStampSystemPage> {
   }
 
 
-
   Future<void> _saveSettings() async {
     try {
-      await _firestore
+      final docRef = _firestore
           .collection('merchants')
           .doc(widget.merchantId)
           .collection('stampCards')
-          .doc(currentCard.id)
-          .set(
-        currentCard.toFirestoreMap(widget.merchantId),
+          .doc(currentCard.id);
+
+      final doc = await docRef.get();
+
+      final data = currentCard.toFirestoreMap(widget.merchantId);
+
+      if (!doc.exists) {
+        data['createdAt'] = FieldValue.serverTimestamp();
+      }
+
+      await docRef.set(
+        data,
         SetOptions(merge: true),
       );
 
@@ -347,6 +374,8 @@ class _MerchantStampSystemPageState extends State<MerchantStampSystemPage> {
           content: Text('${currentCard.title} gespeichert'),
         ),
       );
+
+      await _loadStampCards();
     } catch (error) {
       debugPrint('Fehler beim Speichern der Stempelkarte: $error');
 
@@ -417,7 +446,7 @@ class _MerchantStampSystemPageState extends State<MerchantStampSystemPage> {
 
       setState(() {
         stampCards.removeAt(selectedIndex);
-        selectedIndex = 0;
+        selectedIndex = selectedIndex > 0 ? selectedIndex - 1 : 0;
       });
 
       if (!mounted) return;
@@ -620,8 +649,8 @@ class _MerchantStampSystemPageState extends State<MerchantStampSystemPage> {
         ),
       );
     }
-    final progress = currentCard.previewCollectedStamps / currentCard.stampCount;
-
+    final previewStamps = currentCard.stampCount >= 2 ? 2 : currentCard.stampCount;
+    final progress = previewStamps / currentCard.stampCount;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Stempelkarten'),
@@ -643,8 +672,7 @@ class _MerchantStampSystemPageState extends State<MerchantStampSystemPage> {
           const SizedBox(height: 16),
           _previewCard(progress),
           const SizedBox(height: 18),
-          _quickActionsCard(),
-          const SizedBox(height: 18),
+
           _sectionTitle('Aufbau'),
           const SizedBox(height: 10),
           _setupCard(),
@@ -848,7 +876,7 @@ class _MerchantStampSystemPageState extends State<MerchantStampSystemPage> {
           const SizedBox(height: 18),
           _responsiveStampGrid(
             stampCount: currentCard.stampCount,
-            collected: currentCard.previewCollectedStamps,
+            collected: currentCard.stampCount >= 2 ? 2 : currentCard.stampCount,
             size: 48,
           ),
           const SizedBox(height: 18),
@@ -869,59 +897,11 @@ class _MerchantStampSystemPageState extends State<MerchantStampSystemPage> {
     );
   }
 
-  Widget _quickActionsCard() {
-    return _baseCard(
-      child: Column(
-        children: [
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: currentCard.isPublic,
-            onChanged: (value) {
-              setState(() => currentCard.isPublic = value);
-            },
-            title: const Text(
-              'Öffentlich',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
-            subtitle: const Text('Kunde kann diese Karte sehen'),
-          ),
-          const Divider(),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _duplicateCurrentCard,
-                  icon: const Icon(Icons.copy_outlined),
-                  label: const Text('Duplizieren'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _deleteCurrentCard,
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('Karte löschen'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _setupCard() {
     return _baseCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Wie viele Stempel braucht der Kunde?',
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
-          ),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -958,28 +938,6 @@ class _MerchantStampSystemPageState extends State<MerchantStampSystemPage> {
                 icon: const Icon(Icons.add_circle_outline),
               ),
             ],
-          ),
-          const SizedBox(height: 18),
-          const Text(
-            'Test-Vorschau',
-            style: TextStyle(fontWeight: FontWeight.w900),
-          ),
-          Slider(
-            value: currentCard.previewCollectedStamps.toDouble(),
-            min: 0,
-            max: currentCard.stampCount.toDouble(),
-            divisions: currentCard.stampCount,
-            label: '${currentCard.previewCollectedStamps}',
-            onChanged: (value) {
-              setState(() {
-                currentCard.previewCollectedStamps = value.round();
-              });
-            },
-          ),
-          const SizedBox(height: 18),
-          const Text(
-            'Wofür bekommt der Kunde einen Stempel?',
-            style: TextStyle(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 10),
           Wrap(

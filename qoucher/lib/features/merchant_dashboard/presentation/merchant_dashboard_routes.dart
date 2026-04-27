@@ -13,6 +13,8 @@ import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_
 import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_stamp_system_page.dart';
 import 'package:qoucher/features/merchant_dashboard/presentation/pages/scanned_customer_page.dart';
 
+import 'flows/create_action/create_action_type_step.dart';
+
 class MerchantDashboardRoutes {
   static const String dashboard = '/merchant-dashboard';
   static const String actions = '/merchant-dashboard/actions';

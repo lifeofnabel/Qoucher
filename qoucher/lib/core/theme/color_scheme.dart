@@ -8,37 +8,43 @@ class AppColorScheme {
     brightness: Brightness.light,
 
     primary: AppColors.primary,
-    onPrimary: Colors.white,
+    onPrimary: AppColors.black,
 
-    primaryContainer: AppColors.primaryLight,
+    primaryContainer: AppColors.primarySoft,
     onPrimaryContainer: AppColors.primaryDeep,
 
-    secondary: AppColors.accent,
-    onSecondary: AppColors.primaryDeep,
+    secondary: AppColors.black,
+    onSecondary: AppColors.white,
 
-    secondaryContainer: AppColors.accentSoft,
-    onSecondaryContainer: AppColors.primaryDeep,
+    secondaryContainer: AppColors.backgroundDeep,
+    onSecondaryContainer: AppColors.black,
 
-    tertiary: AppColors.primaryDark,
-    onTertiary: Colors.white,
+    tertiary: AppColors.red,
+    onTertiary: AppColors.white,
+
+    tertiaryContainer: AppColors.accentSoft,
+    onTertiaryContainer: AppColors.red,
 
     error: AppColors.error,
-    onError: Colors.white,
+    onError: AppColors.white,
+
+    errorContainer: AppColors.accentSoft,
+    onErrorContainer: AppColors.red,
 
     surface: AppColors.surface,
     onSurface: AppColors.textPrimary,
 
-    surfaceContainerHighest: AppColors.primarySoft,
+    surfaceContainerHighest: AppColors.backgroundDeep,
     onSurfaceVariant: AppColors.textSecondary,
 
-    outline: AppColors.border,
-    outlineVariant: AppColors.borderStrong,
+    outline: AppColors.borderStrong,
+    outlineVariant: AppColors.border,
 
     shadow: AppColors.shadow,
     scrim: Colors.black54,
 
-    inverseSurface: AppColors.primaryDeep,
-    onInverseSurface: Colors.white,
-    inversePrimary: AppColors.primaryLight,
+    inverseSurface: AppColors.black,
+    onInverseSurface: AppColors.white,
+    inversePrimary: AppColors.amber,
   );
 }

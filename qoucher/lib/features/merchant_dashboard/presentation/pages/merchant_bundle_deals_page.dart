@@ -1,23 +1,26 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:qoucher/core/constants/app_colors.dart';
+import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_bundle_deals_page.dart';
 
-class MerchantDiscountActionDraft {
-  MerchantDiscountActionDraft({
+class MerchantBundleDealDraft {
+  MerchantBundleDealDraft({
     required this.id,
     required this.merchantId,
     required this.shopName,
-    required this.type,
     required this.title,
     required this.subtitle,
     required this.description,
+    required this.buyItemId,
+    required this.buyItemName,
+    required this.getItemId,
+    required this.getItemName,
     required this.oldPrice,
     required this.newPrice,
     required this.startDate,
     required this.endDate,
     required this.isActive,
     required this.isArchived,
-    required this.imageUrl,
   });
 
   final String id;
@@ -25,10 +28,15 @@ class MerchantDiscountActionDraft {
   String merchantId;
   String shopName;
 
-  String type;
   String title;
   String subtitle;
   String description;
+
+  String buyItemId;
+  String buyItemName;
+
+  String getItemId;
+  String getItemName;
 
   double? oldPrice;
   double? newPrice;
@@ -39,9 +47,7 @@ class MerchantDiscountActionDraft {
   bool isActive;
   bool isArchived;
 
-  String imageUrl;
-
-  factory MerchantDiscountActionDraft.fromFirestore(
+  factory MerchantBundleDealDraft.fromFirestore(
       String documentId,
       Map<String, dynamic> data,
       ) {
@@ -50,21 +56,23 @@ class MerchantDiscountActionDraft {
       return null;
     }
 
-    return MerchantDiscountActionDraft(
+    return MerchantBundleDealDraft(
       id: data['id'] as String? ?? documentId,
       merchantId: data['merchantId'] as String? ?? '',
       shopName: data['shopName'] as String? ?? '',
-      type: data['type'] as String? ?? 'deal',
-      title: data['title'] as String? ?? 'Rabattierter Artikel',
-      subtitle: data['subtitle'] as String? ?? 'Kurzer Deal-Text',
+      title: data['title'] as String? ?? '2 für 1 Deal',
+      subtitle: data['subtitle'] as String? ?? 'Kaufe eins, erhalte eins dazu',
       description: data['description'] as String? ?? '',
+      buyItemId: data['buyItemId'] as String? ?? '',
+      buyItemName: data['buyItemName'] as String? ?? 'Artikel auswählen',
+      getItemId: data['getItemId'] as String? ?? '',
+      getItemName: data['getItemName'] as String? ?? 'Artikel auswählen',
       oldPrice: (data['oldPrice'] as num?)?.toDouble(),
       newPrice: (data['newPrice'] as num?)?.toDouble(),
       startDate: parseDate(data['startDate']),
       endDate: parseDate(data['endDate']),
       isActive: data['isActive'] as bool? ?? false,
       isArchived: data['isArchived'] as bool? ?? false,
-      imageUrl: data['imageUrl'] as String? ?? '',
     );
   }
 
@@ -76,65 +84,95 @@ class MerchantDiscountActionDraft {
       'id': id,
       'merchantId': merchantId,
       'shopName': shopName,
-      'type': type,
+      'type': 'bundle_deal',
       'title': title,
       'subtitle': subtitle,
       'description': description,
+      'buyItemId': buyItemId,
+      'buyItemName': buyItemName,
+      'getItemId': getItemId,
+      'getItemName': getItemName,
       'oldPrice': oldPrice,
       'newPrice': newPrice,
       'startDate': startDate == null ? null : Timestamp.fromDate(startDate!),
       'endDate': endDate == null ? null : Timestamp.fromDate(endDate!),
       'isActive': isActive,
       'isArchived': isArchived,
-      'imageUrl': imageUrl,
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }
 
-  MerchantDiscountActionDraft copyWithNewId() {
-    return MerchantDiscountActionDraft(
+  MerchantBundleDealDraft copyWithNewId() {
+    return MerchantBundleDealDraft(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       merchantId: merchantId,
       shopName: shopName,
-      type: type,
       title: '$title Kopie',
       subtitle: subtitle,
       description: description,
+      buyItemId: buyItemId,
+      buyItemName: buyItemName,
+      getItemId: getItemId,
+      getItemName: getItemName,
       oldPrice: oldPrice,
       newPrice: newPrice,
       startDate: startDate,
       endDate: endDate,
       isActive: false,
       isArchived: false,
-      imageUrl: imageUrl,
     );
   }
 }
 
-class MerchantDiscountActionsPage extends StatefulWidget {
-  const MerchantDiscountActionsPage({
+class MerchantShopItemOption {
+  const MerchantShopItemOption({
+    required this.id,
+    required this.name,
+    this.price,
+  });
+
+  final String id;
+  final String name;
+  final double? price;
+
+  factory MerchantShopItemOption.fromFirestore(
+      String documentId,
+      Map<String, dynamic> data,
+      ) {
+    return MerchantShopItemOption(
+      id: documentId,
+      name: data['title'] as String? ??
+          data['name'] as String? ??
+          data['itemName'] as String? ??
+          'Unbenannter Artikel',
+      price: (data['price'] as num?)?.toDouble(),
+    );
+  }
+}
+
+class MerchantBundleDealsPage extends StatefulWidget {
+  const MerchantBundleDealsPage({
     super.key,
     required this.merchantId,
     required this.shopName,
-    this.actionId,
   });
 
   final String merchantId;
   final String shopName;
-  final String? actionId;
 
   @override
-  State<MerchantDiscountActionsPage> createState() =>
-      _MerchantDiscountActionsPageState();
+  State<MerchantBundleDealsPage> createState() =>
+      _MerchantBundleDealsPageState();
 }
 
-class _MerchantDiscountActionsPageState
-    extends State<MerchantDiscountActionsPage> {
+class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  final List<MerchantDiscountActionDraft> actions = [];
+  final List<MerchantBundleDealDraft> deals = [];
+  final List<MerchantShopItemOption> merchantItems = [];
 
   int selectedIndex = 0;
+
   bool isLoading = true;
   bool isSaving = false;
 
@@ -144,20 +182,26 @@ class _MerchantDiscountActionsPageState
   final TextEditingController oldPriceController = TextEditingController();
   final TextEditingController newPriceController = TextEditingController();
 
-  MerchantDiscountActionDraft get currentAction => actions[selectedIndex];
+  MerchantBundleDealDraft get currentDeal => deals[selectedIndex];
 
-
-  CollectionReference<Map<String, dynamic>> get _actionsRef {
+  CollectionReference<Map<String, dynamic>> get _bundleDealsRef {
     return _firestore
         .collection('merchants')
         .doc(widget.merchantId)
-        .collection('actions');
+        .collection('bundleDeals');
+  }
+
+  CollectionReference<Map<String, dynamic>> get _itemsRef {
+    return _firestore
+        .collection('merchants')
+        .doc(widget.merchantId)
+        .collection('items');
   }
 
   @override
   void initState() {
     super.initState();
-    _loadActions();
+    _loadEverything();
   }
 
   @override
@@ -170,112 +214,144 @@ class _MerchantDiscountActionsPageState
     super.dispose();
   }
 
-  Future<void> _loadActions() async {
+  Future<void> _loadEverything() async {
     setState(() => isLoading = true);
 
     try {
-      final snapshot = await _actionsRef.orderBy('updatedAt', descending: true).get();
+      await Future.wait([
+        _loadMerchantItems(),
+        _loadBundleDeals(),
+      ]);
 
-      actions.clear();
-
-      for (final doc in snapshot.docs) {
-        actions.add(
-          MerchantDiscountActionDraft.fromFirestore(
-            doc.id,
-            doc.data(),
-          ),
-        );
+      if (deals.isEmpty) {
+        deals.add(_defaultDeal());
       }
 
-      if (actions.isEmpty) {
-        actions.add(_defaultAction());
-      }
-
-      if (widget.actionId != null && widget.actionId!.isNotEmpty) {
-        final index = actions.indexWhere((item) => item.id == widget.actionId);
-        selectedIndex = index >= 0 ? index : 0;
-      } else {
-        selectedIndex = 0;
-      }
-
+      selectedIndex = 0;
       _syncControllersFromCurrent();
 
       if (!mounted) return;
       setState(() => isLoading = false);
     } catch (error) {
-      debugPrint('Fehler beim Laden der Aktionen: $error');
+      debugPrint('Fehler beim Laden: $error');
 
-      if (actions.isEmpty) {
-        actions.add(_defaultAction());
+      if (deals.isEmpty) {
+        deals.add(_defaultDeal());
         selectedIndex = 0;
         _syncControllersFromCurrent();
       }
 
       if (!mounted) return;
-
       setState(() => isLoading = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Rabattierte Artikel konnten nicht geladen werden'),
+          content: Text('Bundle Deals konnten nicht geladen werden'),
         ),
       );
     }
   }
 
+  Future<void> _loadMerchantItems() async {
+    QuerySnapshot<Map<String, dynamic>> snapshot;
+
+    try {
+      snapshot = await _itemsRef.orderBy('title').get();
+    } catch (_) {
+      snapshot = await _itemsRef.get();
+    }
+
+    merchantItems
+      ..clear()
+      ..addAll(
+        snapshot.docs.map(
+              (doc) => MerchantShopItemOption.fromFirestore(
+            doc.id,
+            doc.data(),
+          ),
+        ),
+      );
+  }
+
+  Future<void> _loadBundleDeals() async {
+    QuerySnapshot<Map<String, dynamic>> snapshot;
+
+    try {
+      snapshot = await _bundleDealsRef.orderBy('updatedAt', descending: true).get();
+    } catch (_) {
+      snapshot = await _bundleDealsRef.get();
+    }
+
+    deals
+      ..clear()
+      ..addAll(
+        snapshot.docs.map(
+              (doc) => MerchantBundleDealDraft.fromFirestore(
+            doc.id,
+            doc.data(),
+          ),
+        ),
+      );
+  }
+
   void _syncControllersFromCurrent() {
-    titleController.text = currentAction.title;
-    subtitleController.text = currentAction.subtitle;
-    descriptionController.text = currentAction.description;
+    titleController.text = currentDeal.title;
+    subtitleController.text = currentDeal.subtitle;
+    descriptionController.text = currentDeal.description;
 
-    oldPriceController.text = currentAction.oldPrice == null
+    oldPriceController.text = currentDeal.oldPrice == null
         ? ''
-        : _formatPriceInput(currentAction.oldPrice!);
+        : _formatPriceInput(currentDeal.oldPrice!);
 
-    newPriceController.text = currentAction.newPrice == null
+    newPriceController.text = currentDeal.newPrice == null
         ? ''
-        : _formatPriceInput(currentAction.newPrice!);
+        : _formatPriceInput(currentDeal.newPrice!);
   }
 
   void _syncCurrentFromControllers() {
-    currentAction.title = titleController.text.trim().isEmpty
-        ? 'Rabattierter Artikel'
+    currentDeal.title = titleController.text.trim().isEmpty
+        ? '2 für 1 Deal'
         : titleController.text.trim();
 
-    currentAction.subtitle = subtitleController.text.trim().isEmpty
-        ? 'Kurzer Deal-Text'
+    currentDeal.subtitle = subtitleController.text.trim().isEmpty
+        ? 'Kaufe eins, erhalte eins dazu'
         : subtitleController.text.trim();
 
-    currentAction.description = descriptionController.text.trim();
+    currentDeal.description = descriptionController.text.trim();
 
-    currentAction.oldPrice = double.tryParse(
+    currentDeal.oldPrice = double.tryParse(
       oldPriceController.text.trim().replaceAll(',', '.'),
     );
 
-    currentAction.newPrice = double.tryParse(
+    currentDeal.newPrice = double.tryParse(
       newPriceController.text.trim().replaceAll(',', '.'),
     );
   }
 
-  Future<void> _saveCurrentAction() async {
+  Future<void> _saveCurrentDeal() async {
     _syncCurrentFromControllers();
 
-    if (currentAction.title.trim().isEmpty) {
+    if (currentDeal.title.trim().isEmpty) {
       _showMessage('Bitte Titel eingeben');
       return;
     }
 
-    if (currentAction.subtitle.trim().isEmpty) {
-      _showMessage('Bitte Untertitel eingeben');
+    if (currentDeal.buyItemId.isEmpty) {
+      _showMessage('Bitte Kauf-Artikel auswählen');
       return;
     }
 
-    if (currentAction.startDate == null || currentAction.endDate == null) {
+    if (currentDeal.getItemId.isEmpty) {
+      _showMessage('Bitte Erhalte-Artikel auswählen');
+      return;
+    }
+
+    if (currentDeal.startDate == null || currentDeal.endDate == null) {
       _showMessage('Bitte Beginn und Ende auswählen');
       return;
     }
 
-    if (currentAction.endDate!.isBefore(currentAction.startDate!)) {
+    if (currentDeal.endDate!.isBefore(currentDeal.startDate!)) {
       _showMessage('Enddatum darf nicht vor Beginn liegen');
       return;
     }
@@ -283,10 +359,10 @@ class _MerchantDiscountActionsPageState
     setState(() => isSaving = true);
 
     try {
-      final doc = _actionsRef.doc(currentAction.id);
-
+      final doc = _bundleDealsRef.doc(currentDeal.id);
       final existingDoc = await doc.get();
-      final data = currentAction.toFirestoreMap(
+
+      final data = currentDeal.toFirestoreMap(
         merchantId: widget.merchantId,
         shopName: widget.shopName,
       );
@@ -303,11 +379,11 @@ class _MerchantDiscountActionsPageState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${currentAction.title} gespeichert'),
+          content: Text('${currentDeal.title} gespeichert'),
         ),
       );
 
-      await _loadActions();
+      await _loadEverything();
     } catch (error) {
       debugPrint('Fehler beim Speichern: $error');
 
@@ -323,28 +399,44 @@ class _MerchantDiscountActionsPageState
     }
   }
 
-  void _createNewAction() {
+  void _createNewDeal() {
     _syncCurrentFromControllers();
 
     setState(() {
-      actions.add(_defaultAction());
-      selectedIndex = actions.length - 1;
+      deals.add(_defaultDeal());
+      selectedIndex = deals.length - 1;
       _syncControllersFromCurrent();
     });
   }
 
-  Future<void> _deleteCurrentAction() async {
-    if (actions.length == 1) {
+  void _duplicateCurrentDeal() {
+    _syncCurrentFromControllers();
+
+    setState(() {
+      deals.add(currentDeal.copyWithNewId());
+      selectedIndex = deals.length - 1;
+      _syncControllersFromCurrent();
+    });
+  }
+
+  Future<void> _deleteCurrentDeal() async {
+    if (deals.length == 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Mindestens ein rabattierter Artikel muss bleiben'),
+          content: Text('Mindestens ein Bundle Deal muss bleiben'),
         ),
       );
       return;
     }
 
-    final actionToDelete = currentAction;
+    final dealToDelete = currentDeal;
 
+
+  }
+
+  void _openItemPicker({
+    required bool isBuyItem,
+  }) {
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
@@ -355,80 +447,96 @@ class _MerchantDiscountActionsPageState
         ),
       ),
       builder: (_) {
-        return Padding(
+        if (merchantItems.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Keine Artikel gefunden',
+                  style: TextStyle(
+                    color: AppColors.black,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Lege zuerst Artikel unter „Meine Artikel“ an.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Okay'),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView(
+          shrinkWrap: true,
           padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Artikel löschen?',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.black,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                ),
+          children: [
+            Text(
+              isBuyItem ? 'Kauf-Artikel wählen' : 'Erhalte-Artikel wählen',
+              style: const TextStyle(
+                color: AppColors.black,
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
               ),
-              const SizedBox(height: 8),
-              Text(
-                actionToDelete.title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppColors.textMuted,
-                  fontWeight: FontWeight.w800,
+            ),
+            const SizedBox(height: 14),
+            ...merchantItems.map((item) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.inputFill,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: AppColors.border,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Abbrechen'),
+                child: ListTile(
+                  leading: const Icon(Icons.inventory_2_rounded),
+                  title: Text(
+                    item.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.black,
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () async {
-                        Navigator.pop(context);
-
-                        try {
-                          await _actionsRef.doc(actionToDelete.id).delete();
-
-                          setState(() {
-                            actions.removeAt(selectedIndex);
-                            selectedIndex = 0;
-                            _syncControllersFromCurrent();
-                          });
-
-                          if (!mounted) return;
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('${actionToDelete.title} gelöscht'),
-                            ),
-                          );
-                        } catch (error) {
-                          debugPrint('Fehler beim Löschen: $error');
-
-                          if (!mounted) return;
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Löschen fehlgeschlagen'),
-                            ),
-                          );
-                        }
-                      },
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('Löschen'),
-                    ),
+                  subtitle: Text(
+                    item.price == null
+                        ? 'Preis nicht gesetzt'
+                        : '${_formatPriceInput(item.price!)} €',
                   ),
-                ],
-              ),
-            ],
-          ),
+                  onTap: () {
+                    setState(() {
+                      if (isBuyItem) {
+                        currentDeal.buyItemId = item.id;
+                        currentDeal.buyItemName = item.name;
+                      } else {
+                        currentDeal.getItemId = item.id;
+                        currentDeal.getItemName = item.name;
+                      }
+                    });
+
+                    Navigator.pop(context);
+                  },
+                ),
+              );
+            }),
+          ],
         );
       },
     );
@@ -438,8 +546,8 @@ class _MerchantDiscountActionsPageState
     required bool isStart,
   }) async {
     final initialDate = isStart
-        ? currentAction.startDate ?? DateTime.now()
-        : currentAction.endDate ?? currentAction.startDate ?? DateTime.now();
+        ? currentDeal.startDate ?? DateTime.now()
+        : currentDeal.endDate ?? currentDeal.startDate ?? DateTime.now();
 
     final picked = await showDatePicker(
       context: context,
@@ -452,65 +560,16 @@ class _MerchantDiscountActionsPageState
 
     setState(() {
       if (isStart) {
-        currentAction.startDate = picked;
+        currentDeal.startDate = picked;
 
-        if (currentAction.endDate != null &&
-            currentAction.endDate!.isBefore(currentAction.startDate!)) {
-          currentAction.endDate = picked;
+        if (currentDeal.endDate != null &&
+            currentDeal.endDate!.isBefore(currentDeal.startDate!)) {
+          currentDeal.endDate = picked;
         }
       } else {
-        currentAction.endDate = picked;
+        currentDeal.endDate = picked;
       }
     });
-  }
-
-  void _openImagePlaceholderSheet() {
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(28),
-        ),
-      ),
-      builder: (_) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Bild hinzufügen',
-                style: TextStyle(
-                  color: AppColors.black,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Upload kommt später. Aktuell ist es ein sauberer Bildhalter.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.check_rounded),
-                  label: const Text('Okay'),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
   }
 
   String _formatDate(DateTime? date) {
@@ -527,7 +586,6 @@ class _MerchantDiscountActionsPageState
     return price.toStringAsFixed(2).replaceAll('.', ',');
   }
 
-
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -536,24 +594,26 @@ class _MerchantDiscountActionsPageState
     );
   }
 
-  MerchantDiscountActionDraft _defaultAction() {
+  MerchantBundleDealDraft _defaultDeal() {
     final now = DateTime.now();
 
-    return MerchantDiscountActionDraft(
+    return MerchantBundleDealDraft(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       merchantId: widget.merchantId,
       shopName: widget.shopName,
-      type: 'deal',
-      title: 'Rabattierter Artikel',
-      subtitle: 'Kurzer Deal-Text',
+      title: '2 für 1 Deal',
+      subtitle: 'Kaufe Artikel X und erhalte Artikel Y',
       description: '',
+      buyItemId: '',
+      buyItemName: 'Kauf-Artikel wählen',
+      getItemId: '',
+      getItemName: 'Erhalte-Artikel wählen',
       oldPrice: null,
       newPrice: null,
       startDate: now,
       endDate: now.add(const Duration(days: 7)),
       isActive: false,
       isArchived: false,
-      imageUrl: '',
     );
   }
 
@@ -570,30 +630,17 @@ class _MerchantDiscountActionsPageState
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Rabattierte Artikel'),
-        actions: [
-          IconButton(
-            onPressed: isSaving ? null : _saveCurrentAction,
-            icon: isSaving
-                ? const SizedBox(
-              width: 19,
-              height: 19,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-                : const Icon(Icons.check_circle_outline),
-          ),
-        ],
-      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
         children: [
-          _actionsSwitcher(),
+          _dealsSwitcher(),
           const SizedBox(height: 16),
-          _imageHero(),
+          _heroCard(),
           const SizedBox(height: 12),
-          _sectionTitle('Aufbau'),
+          _sectionTitle('Artikel-Kombi'),
           const SizedBox(height: 10),
+          _comboCard(),
+          const SizedBox(height: 12),
           _mainInfoCard(),
           const SizedBox(height: 12),
           _dateCard(),
@@ -605,22 +652,34 @@ class _MerchantDiscountActionsPageState
           _sectionTitle('Sichtbarkeit'),
           const SizedBox(height: 10),
           _statusCard(),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: isSaving ? null : _saveCurrentDeal,
+            icon: isSaving
+                ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+                : const Icon(Icons.save_outlined),
+            label: Text(isSaving ? 'Speichert...' : 'Bundle Deal speichern'),
+          ),
         ],
       ),
     );
   }
 
-  Widget _actionsSwitcher() {
+  Widget _dealsSwitcher() {
     return SizedBox(
       height: 104,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: actions.length + 1,
+        itemCount: deals.length + 1,
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
-          if (index == actions.length) {
+          if (index == deals.length) {
             return InkWell(
-              onTap: _createNewAction,
+              onTap: _createNewDeal,
               borderRadius: BorderRadius.circular(22),
               child: Container(
                 width: 120,
@@ -636,18 +695,12 @@ class _MerchantDiscountActionsPageState
                 child: const Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.add_circle_outline_rounded,
-                      color: AppColors.black,
-                    ),
+                    Icon(Icons.add_circle_outline_rounded),
                     SizedBox(height: 8),
                     Text(
-                      'Neuer Artikel',
+                      'Neuer Deal',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: AppColors.black,
-                        fontWeight: FontWeight.w900,
-                      ),
+                      style: TextStyle(fontWeight: FontWeight.w900),
                     ),
                   ],
                 ),
@@ -655,7 +708,7 @@ class _MerchantDiscountActionsPageState
             );
           }
 
-          final action = actions[index];
+          final deal = deals[index];
           final selected = index == selectedIndex;
 
           return InkWell(
@@ -673,29 +726,24 @@ class _MerchantDiscountActionsPageState
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: selected
-                    ? const Color(0xFFEFD9A8)
+                    ? const Color(0xFFFFD6D9)
                     : AppColors.surface.withOpacity(0.88),
                 borderRadius: BorderRadius.circular(22),
                 border: Border.all(
-                  color: selected ? const Color(0xFFE89A00) : AppColors.border,
+                  color: selected ? const Color(0xFFE8757C) : AppColors.border,
                   width: selected ? 1.4 : 1,
                 ),
-                boxShadow: selected
-                    ? const [
-                  BoxShadow(
-                    color: AppColors.shadow,
-                    blurRadius: 14,
-                    offset: Offset(0, 7),
-                  ),
-                ]
-                    : null,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const Icon(
+                    Icons.filter_2_rounded,
+                    color: Color(0xFFB5121B),
+                  ),
                   const Spacer(),
                   Text(
-                    action.title,
+                    deal.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -706,9 +754,9 @@ class _MerchantDiscountActionsPageState
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    action.isActive ? 'Aktiv' : 'Pausiert',
+                    deal.isActive ? 'Aktiv' : 'Pausiert',
                     style: TextStyle(
-                      color: action.isActive
+                      color: deal.isActive
                           ? const Color(0xFF168A46)
                           : AppColors.textMuted,
                       fontWeight: FontWeight.w800,
@@ -724,73 +772,151 @@ class _MerchantDiscountActionsPageState
     );
   }
 
-  Widget _imageHero() {
-    return InkWell(
-      onTap: _openImagePlaceholderSheet,
-      borderRadius: BorderRadius.circular(30),
-      child: Container(
-        height: 210,
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: const Color(0xFFD9BE86),
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(
-            color: const Color(0xFF8F6B24),
-            width: 1.4,
+  Widget _heroCard() {
+    return Container(
+      height: 190,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFD6D9),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(
+          color: const Color(0xFFE8757C),
+          width: 1.4,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: 24,
+            offset: Offset(0, 12),
           ),
-          boxShadow: const [
-            BoxShadow(
-              color: AppColors.shadow,
-              blurRadius: 24,
-              offset: Offset(0, 12),
+        ],
+      ),
+      child: Row(
+        children: [
+          _heroItemBox(
+            label: 'Kauf',
+            title: currentDeal.buyItemName,
+            icon: Icons.shopping_bag_rounded,
+          ),
+          const SizedBox(width: 12),
+          Container(
+            width: 42,
+            height: 42,
+            decoration: const BoxDecoration(
+              color: AppColors.black,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.add_rounded,
+              color: AppColors.white,
+            ),
+          ),
+          const SizedBox(width: 12),
+          _heroItemBox(
+            label: 'Erhalte',
+            title: currentDeal.getItemName,
+            icon: Icons.card_giftcard_rounded,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _heroItemBox({
+    required String label,
+    required String title,
+    required IconData icon,
+  }) {
+    return Expanded(
+      child: Container(
+        height: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: AppColors.border,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: const Color(0xFFB5121B),
+              size: 34,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              title,
+              maxLines: 2,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.black,
+                fontWeight: FontWeight.w900,
+                fontSize: 14,
+              ),
             ),
           ],
-        ),
-        child: Center(
-          child: Container(
-            width: 132,
-            height: 132,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(34),
-              border: Border.all(
-                color: AppColors.border,
-                width: 1.2,
-              ),
-              boxShadow: const [
-                BoxShadow(
-                  color: AppColors.shadow,
-                  blurRadius: 16,
-                  offset: Offset(0, 8),
-                ),
-              ],
-            ),
-            child: const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.add_photo_alternate_outlined,
-                  color: AppColors.black,
-                  size: 42,
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Bild',
-                  style: TextStyle(
-                    color: AppColors.black,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
   }
 
 
+  Widget _comboCard() {
+    return _baseCard(
+      child: Column(
+        children: [
+          _pickerRow(
+            icon: Icons.shopping_bag_outlined,
+            title: 'Kauf Artikel',
+            value: currentDeal.buyItemName,
+            onTap: () => _openItemPicker(isBuyItem: true),
+          ),
+          const Divider(),
+          _pickerRow(
+            icon: Icons.card_giftcard_outlined,
+            title: 'Erhalte Artikel',
+            value: currentDeal.getItemName,
+            onTap: () => _openItemPicker(isBuyItem: false),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pickerRow({
+    required IconData icon,
+    required String title,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: AppColors.black,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      subtitle: Text(value),
+      trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+      onTap: onTap,
+    );
+  }
 
   Widget _mainInfoCard() {
     return _baseCard(
@@ -808,17 +934,17 @@ class _MerchantDiscountActionsPageState
           const SizedBox(height: 12),
           TextField(
             controller: titleController,
-            onChanged: (value) => currentAction.title = value,
+            onChanged: (value) => currentDeal.title = value,
             decoration: const InputDecoration(
               labelText: 'Titel',
-              hintText: 'z. B. Shawarma Deal',
+              hintText: 'z. B. Shawarma 2 für 1',
               prefixIcon: Icon(Icons.title_rounded),
             ),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: subtitleController,
-            onChanged: (value) => currentAction.subtitle = value,
+            onChanged: (value) => currentDeal.subtitle = value,
             decoration: const InputDecoration(
               labelText: 'Untertitel',
               hintText: 'z. B. Nur diese Woche',
@@ -849,7 +975,7 @@ class _MerchantDiscountActionsPageState
               Expanded(
                 child: _dateButton(
                   title: 'Beginn',
-                  value: _formatDate(currentAction.startDate),
+                  value: _formatDate(currentDeal.startDate),
                   icon: Icons.play_arrow_rounded,
                   onTap: () => _pickDate(isStart: true),
                 ),
@@ -858,7 +984,7 @@ class _MerchantDiscountActionsPageState
               Expanded(
                 child: _dateButton(
                   title: 'Ende',
-                  value: _formatDate(currentAction.endDate),
+                  value: _formatDate(currentDeal.endDate),
                   icon: Icons.stop_rounded,
                   onTap: () => _pickDate(isStart: false),
                 ),
@@ -891,13 +1017,13 @@ class _MerchantDiscountActionsPageState
                   controller: oldPriceController,
                   keyboardType: TextInputType.number,
                   onChanged: (value) {
-                    currentAction.oldPrice = double.tryParse(
+                    currentDeal.oldPrice = double.tryParse(
                       value.trim().replaceAll(',', '.'),
                     );
                   },
                   decoration: const InputDecoration(
-                    labelText: 'Altpreis',
-                    hintText: 'z. B. 9,90',
+                    labelText: 'Alter Preis',
+                    hintText: 'z. B. 14,00',
                     prefixIcon: Icon(Icons.euro_rounded),
                   ),
                 ),
@@ -908,13 +1034,13 @@ class _MerchantDiscountActionsPageState
                   controller: newPriceController,
                   keyboardType: TextInputType.number,
                   onChanged: (value) {
-                    currentAction.newPrice = double.tryParse(
+                    currentDeal.newPrice = double.tryParse(
                       value.trim().replaceAll(',', '.'),
                     );
                   },
                   decoration: const InputDecoration(
-                    labelText: 'Neupreis',
-                    hintText: 'z. B. 6,90',
+                    labelText: 'Neuer Preis',
+                    hintText: 'z. B. 9,90',
                     prefixIcon: Icon(Icons.sell_rounded),
                   ),
                 ),
@@ -942,7 +1068,7 @@ class _MerchantDiscountActionsPageState
           const SizedBox(height: 12),
           TextField(
             controller: descriptionController,
-            onChanged: (value) => currentAction.description = value,
+            onChanged: (value) => currentDeal.description = value,
             minLines: 4,
             maxLines: 7,
             decoration: const InputDecoration(
@@ -962,10 +1088,10 @@ class _MerchantDiscountActionsPageState
       child: Row(
         children: [
           _iconBox(
-            icon: currentAction.isActive
+            icon: currentDeal.isActive
                 ? Icons.visibility_rounded
                 : Icons.visibility_off_rounded,
-            bg: currentAction.isActive
+            bg: currentDeal.isActive
                 ? const Color(0xFFFFD36A)
                 : const Color(0xFFE5D2AF),
             fg: AppColors.black,
@@ -973,7 +1099,7 @@ class _MerchantDiscountActionsPageState
           const SizedBox(width: 12),
           const Expanded(
             child: Text(
-              'Artikel aktiv',
+              'Deal aktiv',
               style: TextStyle(
                 color: AppColors.black,
                 fontSize: 16,
@@ -982,9 +1108,9 @@ class _MerchantDiscountActionsPageState
             ),
           ),
           Switch(
-            value: currentAction.isActive,
+            value: currentDeal.isActive,
             onChanged: (value) {
-              setState(() => currentAction.isActive = value);
+              setState(() => currentDeal.isActive = value);
             },
           ),
         ],
@@ -1092,16 +1218,4 @@ class _MerchantDiscountActionsPageState
       child: child,
     );
   }
-}
-
-class _ActionTypeOption {
-  const _ActionTypeOption({
-    required this.id,
-    required this.title,
-    required this.icon,
-  });
-
-  final String id;
-  final String title;
-  final IconData icon;
 }
