@@ -12,6 +12,7 @@ class RouteNames {
 
   // Public
   static const String home = '/home';
+  static const String explorer = '/explorer';
   static const String deals = '/deals';
   static const String merchantDetail = '/merchant-detail';
 

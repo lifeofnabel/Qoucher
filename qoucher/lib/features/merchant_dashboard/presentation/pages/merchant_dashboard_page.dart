@@ -33,6 +33,10 @@ import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_
 import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_shop_page.dart';
 import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_stamp_system_page.dart';
 import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_bundle_deals_page.dart';
+import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_happy_hour_deals_page.dart';
+import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_custom_post_deals_page.dart';
+import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_free_item_deals_page.dart';
+import 'package:qoucher/features/merchant_dashboard/presentation/pages/merchant_rescue_deals_page.dart';
 
 class MerchantDashboardPage extends StatefulWidget {
   const MerchantDashboardPage({
@@ -184,11 +188,11 @@ class _MerchantDashboardPageState extends State<MerchantDashboardPage> {
                 _dashboardGrid(
                   children: [
                     _smallTile(
-                      title: 'Rabatt',
-                      subtitle: '% Aktion',
-                      icon: Icons.percent_rounded,
+                      title: 'Gratis',
+                      subtitle: 'Kaufe X, erhalte Y',
+                      icon: Icons.card_giftcard_rounded,
                       tone: _DashboardTone.action,
-                      onTap: () => _openDiscountActionsPage(
+                      onTap: () => _openFreeItemDealsPage(
                         context,
                         shopName: shopName,
                       ),
@@ -218,7 +222,7 @@ class _MerchantDashboardPageState extends State<MerchantDashboardPage> {
                       subtitle: 'Zeitfenster',
                       icon: Icons.access_time_filled_rounded,
                       tone: _DashboardTone.action,
-                      onTap: () => _openDiscountActionsPage(
+                      onTap: () => _openHappyHourDealsPage(
                         context,
                         shopName: shopName,
                       ),
@@ -228,17 +232,17 @@ class _MerchantDashboardPageState extends State<MerchantDashboardPage> {
                       subtitle: 'Frei bauen',
                       icon: Icons.edit_note_rounded,
                       tone: _DashboardTone.action,
-                      onTap: () => _openDiscountActionsPage(
+                      onTap: () => _openCustomPostDealsPage(
                         context,
                         shopName: shopName,
                       ),
                     ),
                     _smallTile(
-                      title: 'MHD-Ware',
-                      subtitle: 'Schnell raus',
+                      title: 'Rette mich',
+                      subtitle: 'MHD & Tagesware',
                       icon: Icons.schedule_rounded,
                       tone: _DashboardTone.action,
-                      onTap: () => _openDiscountActionsPage(
+                      onTap: () => _openRescueDealsPage(
                         context,
                         shopName: shopName,
                       ),
@@ -1155,6 +1159,20 @@ class _MerchantDashboardPageState extends State<MerchantDashboardPage> {
     );
   }
 
+  void _openFreeItemDealsPage(
+      BuildContext context, {
+        required String shopName,
+      }) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MerchantFreeItemDealsPage(
+          merchantId: widget.merchantId,
+          shopName: shopName,
+        ),
+      ),
+    );
+  }
+
   void _openDiscountActionsPage(
       BuildContext context, {
         required String shopName,
@@ -1268,6 +1286,48 @@ class _MerchantDashboardPageState extends State<MerchantDashboardPage> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => MerchantBundleDealsPage(
+          merchantId: widget.merchantId,
+          shopName: shopName,
+        ),
+      ),
+    );
+  }
+
+  void _openHappyHourDealsPage(
+    BuildContext context, {
+    required String shopName,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MerchantHappyHourDealsPage(
+          merchantId: widget.merchantId,
+          shopName: shopName,
+        ),
+      ),
+    );
+  }
+
+  void _openCustomPostDealsPage(
+    BuildContext context, {
+    required String shopName,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MerchantCustomPostDealsPage(
+          merchantId: widget.merchantId,
+          shopName: shopName,
+        ),
+      ),
+    );
+  }
+
+  void _openRescueDealsPage(
+    BuildContext context, {
+    required String shopName,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MerchantRescueDealsPage(
           merchantId: widget.merchantId,
           shopName: shopName,
         ),

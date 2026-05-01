@@ -179,7 +179,7 @@ class WelcomePage extends StatelessWidget {
         const SizedBox(height: 14),
         TextButton.icon(
           onPressed: () {
-            AppRouter.pushNamed(context, RouteNames.home);
+            AppRouter.pushNamed(context, RouteNames.explorer);
           },
           icon: const Icon(
             Icons.travel_explore_rounded,

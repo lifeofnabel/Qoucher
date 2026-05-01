@@ -5,6 +5,7 @@ import 'package:qoucher/features/auth/presentation/pages/register_page.dart';
 import 'package:qoucher/features/public_home/presentation/pages/merchant_detail_page.dart';
 import 'package:qoucher/features/public_home/presentation/pages/deals_pages.dart';
 import 'package:qoucher/features/public_home/presentation/pages/home_page.dart';
+import 'package:qoucher/features/deals/presentation/pages/explorer_page.dart';
 import 'package:qoucher/features/splash/presentation/pages/splash_page.dart';
 import 'package:qoucher/features/user_dashboard/presentation/pages/loyalty_wallet_page.dart';
 import 'package:qoucher/features/user_dashboard/presentation/pages/my_activity_page.dart';
@@ -60,6 +61,9 @@ class AppRouter {
 
       case RouteNames.home:
         return _buildRoute(const PublicHomePage(), settings);
+
+      case RouteNames.explorer:
+        return _buildRoute(const ExplorerPage(), settings);
 
       case RouteNames.deals:
         return _buildRoute(const PublicDealsPage(), settings);

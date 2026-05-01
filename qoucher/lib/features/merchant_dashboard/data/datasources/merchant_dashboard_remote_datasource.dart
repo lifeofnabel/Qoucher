@@ -43,13 +43,13 @@ class MerchantDashboardRemoteDatasource {
         .collection('merchant_scans')
         .where('merchantId', isEqualTo: merchantId)
         .where(
-      'createdAt',
-      isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
-    )
+          'createdAt',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
+        )
         .where(
-      'createdAt',
-      isLessThan: Timestamp.fromDate(endOfDay),
-    )
+          'createdAt',
+          isLessThan: Timestamp.fromDate(endOfDay),
+        )
         .count()
         .get();
 
@@ -57,6 +57,9 @@ class MerchantDashboardRemoteDatasource {
   }
 
   Future<Map<String, dynamic>> getDashboardOverview(String merchantId) async {
+    // Ensure the merchant document exists in the 'merchants' collection
+    await ensureMerchantDocumentExists(merchantId);
+
     final profile = await getMerchantProfile(merchantId);
     final activeActions = await getActiveActionsCount(merchantId);
     final archivedActions = await getArchivedActionsCount(merchantId);
@@ -68,5 +71,28 @@ class MerchantDashboardRemoteDatasource {
       'archivedActionsCount': archivedActions,
       'scannedTodayCount': scannedToday,
     };
+  }
+
+  Future<void> ensureMerchantDocumentExists(String merchantId) async {
+    final merchantDoc = await _firestore.collection('merchants').doc(merchantId).get();
+
+    if (!merchantDoc.exists || (merchantDoc.data()?.isEmpty ?? true)) {
+      final userDoc = await _firestore.collection('users').doc(merchantId).get();
+      final userData = userDoc.data() ?? {};
+
+      await _firestore.collection('merchants').doc(merchantId).set({
+        'id': merchantId,
+        'ownerId': merchantId,
+        'businessName': userData['businessName'] ?? userData['firstName'] ?? 'Dein Shop',
+        'shopName': userData['businessName'] ?? userData['firstName'] ?? 'Dein Shop',
+        'areaId': userData['areaId'] ?? 'frankfurt_zentrum',
+        'areaName': userData['areaName'] ?? 'Frankfurt Zentrum',
+        'shopTypeIds': userData['shopTypeIds'] ?? ['food'],
+        'shopTypeNames': userData['shopTypeNames'] ?? ['Food'],
+        'isActive': true,
+        'createdAt': userData['createdAt'] ?? FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
   }
 }

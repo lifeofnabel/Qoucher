@@ -2,8 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:qoucher/core/constants/app_colors.dart';
 
-class MerchantBundleDealDraft {
-  MerchantBundleDealDraft({
+class MerchantFreeItemDealDraft {
+  MerchantFreeItemDealDraft({
     required this.id,
     required this.merchantId,
     required this.shopName,
@@ -12,10 +12,8 @@ class MerchantBundleDealDraft {
     required this.description,
     required this.buyItemId,
     required this.buyItemName,
-    required this.getItemId,
-    required this.getItemName,
-    required this.oldPrice,
-    required this.newPrice,
+    required this.freeItemId,
+    required this.freeItemName,
     required this.startDate,
     required this.endDate,
     required this.isActive,
@@ -34,11 +32,8 @@ class MerchantBundleDealDraft {
   String buyItemId;
   String buyItemName;
 
-  String getItemId;
-  String getItemName;
-
-  double? oldPrice;
-  double? newPrice;
+  String freeItemId;
+  String freeItemName;
 
   DateTime? startDate;
   DateTime? endDate;
@@ -46,7 +41,7 @@ class MerchantBundleDealDraft {
   bool isActive;
   bool isArchived;
 
-  factory MerchantBundleDealDraft.fromFirestore(
+  factory MerchantFreeItemDealDraft.fromFirestore(
       String documentId,
       Map<String, dynamic> data,
       ) {
@@ -55,19 +50,17 @@ class MerchantBundleDealDraft {
       return null;
     }
 
-    return MerchantBundleDealDraft(
+    return MerchantFreeItemDealDraft(
       id: data['id'] as String? ?? documentId,
       merchantId: data['merchantId'] as String? ?? '',
       shopName: data['shopName'] as String? ?? '',
-      title: data['title'] as String? ?? '2 für 1 Deal',
-      subtitle: data['subtitle'] as String? ?? 'Kaufe eins, erhalte eins dazu',
+      title: data['title'] as String? ?? 'Kaufe X, erhalte Y gratis',
+      subtitle: data['subtitle'] as String? ?? 'Gratis-Artikel beim Kauf',
       description: data['description'] as String? ?? '',
       buyItemId: data['buyItemId'] as String? ?? '',
-      buyItemName: data['buyItemName'] as String? ?? 'Artikel auswählen',
-      getItemId: data['getItemId'] as String? ?? '',
-      getItemName: data['getItemName'] as String? ?? 'Artikel auswählen',
-      oldPrice: (data['oldPrice'] as num?)?.toDouble(),
-      newPrice: (data['newPrice'] as num?)?.toDouble(),
+      buyItemName: data['buyItemName'] as String? ?? 'Kauf-Artikel wählen',
+      freeItemId: data['freeItemId'] as String? ?? '',
+      freeItemName: data['freeItemName'] as String? ?? 'Gratis-Artikel wählen',
       startDate: parseDate(data['startDate']),
       endDate: parseDate(data['endDate']),
       isActive: data['isActive'] as bool? ?? false,
@@ -83,16 +76,14 @@ class MerchantBundleDealDraft {
       'id': id,
       'merchantId': merchantId,
       'shopName': shopName,
-      'type': 'bundle_deal',
+      'type': 'free_item_deal',
       'title': title,
       'subtitle': subtitle,
       'description': description,
       'buyItemId': buyItemId,
       'buyItemName': buyItemName,
-      'getItemId': getItemId,
-      'getItemName': getItemName,
-      'oldPrice': oldPrice,
-      'newPrice': newPrice,
+      'freeItemId': freeItemId,
+      'freeItemName': freeItemName,
       'startDate': startDate == null ? null : Timestamp.fromDate(startDate!),
       'endDate': endDate == null ? null : Timestamp.fromDate(endDate!),
       'isActive': isActive,
@@ -101,8 +92,8 @@ class MerchantBundleDealDraft {
     };
   }
 
-  MerchantBundleDealDraft copyWithNewId() {
-    return MerchantBundleDealDraft(
+  MerchantFreeItemDealDraft copyWithNewId() {
+    return MerchantFreeItemDealDraft(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       merchantId: merchantId,
       shopName: shopName,
@@ -111,10 +102,8 @@ class MerchantBundleDealDraft {
       description: description,
       buyItemId: buyItemId,
       buyItemName: buyItemName,
-      getItemId: getItemId,
-      getItemName: getItemName,
-      oldPrice: oldPrice,
-      newPrice: newPrice,
+      freeItemId: freeItemId,
+      freeItemName: freeItemName,
       startDate: startDate,
       endDate: endDate,
       isActive: false,
@@ -123,34 +112,38 @@ class MerchantBundleDealDraft {
   }
 }
 
-class MerchantShopItemOption {
-  const MerchantShopItemOption({
+class MerchantItemOption {
+  const MerchantItemOption({
     required this.id,
     required this.name,
     this.price,
+    this.imageUrl = '',
   });
 
   final String id;
   final String name;
   final double? price;
+  final String imageUrl;
 
-  factory MerchantShopItemOption.fromFirestore(
+  factory MerchantItemOption.fromFirestore(
       String documentId,
       Map<String, dynamic> data,
       ) {
-    return MerchantShopItemOption(
-      id: documentId,
-      name: data['title'] as String? ??
-          data['name'] as String? ??
+    return MerchantItemOption(
+      id: data['id'] as String? ?? documentId,
+      name: data['name'] as String? ??
+          data['title'] as String? ??
           data['itemName'] as String? ??
           'Unbenannter Artikel',
-      price: (data['price'] as num?)?.toDouble(),
+      price: (data['price'] as num?)?.toDouble() ??
+          (data['originalPrice'] as num?)?.toDouble(),
+      imageUrl: data['imageUrl'] as String? ?? '',
     );
   }
 }
 
-class MerchantBundleDealsPage extends StatefulWidget {
-  const MerchantBundleDealsPage({
+class MerchantFreeItemDealsPage extends StatefulWidget {
+  const MerchantFreeItemDealsPage({
     super.key,
     required this.merchantId,
     required this.shopName,
@@ -160,15 +153,15 @@ class MerchantBundleDealsPage extends StatefulWidget {
   final String shopName;
 
   @override
-  State<MerchantBundleDealsPage> createState() =>
-      _MerchantBundleDealsPageState();
+  State<MerchantFreeItemDealsPage> createState() =>
+      _MerchantFreeItemDealsPageState();
 }
 
-class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
+class _MerchantFreeItemDealsPageState extends State<MerchantFreeItemDealsPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  final List<MerchantBundleDealDraft> deals = [];
-  final List<MerchantShopItemOption> merchantItems = [];
+  final List<MerchantFreeItemDealDraft> deals = [];
+  final List<MerchantItemOption> merchantItems = [];
 
   int selectedIndex = 0;
 
@@ -178,16 +171,14 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
   final TextEditingController titleController = TextEditingController();
   final TextEditingController subtitleController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
-  final TextEditingController oldPriceController = TextEditingController();
-  final TextEditingController newPriceController = TextEditingController();
 
-  MerchantBundleDealDraft get currentDeal => deals[selectedIndex];
+  MerchantFreeItemDealDraft get currentDeal => deals[selectedIndex];
 
-  CollectionReference<Map<String, dynamic>> get _bundleDealsRef {
+  CollectionReference<Map<String, dynamic>> get _freeDealsRef {
     return _firestore
         .collection('merchants')
         .doc(widget.merchantId)
-        .collection('bundleDeals');
+        .collection('freeItemDeals');
   }
 
   CollectionReference<Map<String, dynamic>> get _itemsRef {
@@ -208,8 +199,6 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
     titleController.dispose();
     subtitleController.dispose();
     descriptionController.dispose();
-    oldPriceController.dispose();
-    newPriceController.dispose();
     super.dispose();
   }
 
@@ -219,7 +208,7 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
     try {
       await Future.wait([
         _loadMerchantItems(),
-        _loadBundleDeals(),
+        _loadDeals(),
       ]);
 
       if (deals.isEmpty) {
@@ -232,7 +221,7 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
       if (!mounted) return;
       setState(() => isLoading = false);
     } catch (error) {
-      debugPrint('Fehler beim Laden: $error');
+      debugPrint('Fehler beim Laden Free Item Deals: $error');
 
       if (deals.isEmpty) {
         deals.add(_defaultDeal());
@@ -242,8 +231,7 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
 
       if (!mounted) return;
       setState(() => isLoading = false);
-
-      _showMessage('Bundle Deals konnten nicht geladen werden');
+      _showMessage('Gratis-Aktionen konnten nicht geladen werden');
     }
   }
 
@@ -251,38 +239,41 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
     QuerySnapshot<Map<String, dynamic>> snapshot;
 
     try {
-      snapshot = await _itemsRef.orderBy('title').get();
+      snapshot = await _itemsRef.get();
     } catch (_) {
       snapshot = await _itemsRef.get();
     }
 
+    final items = snapshot.docs
+        .map(
+          (doc) => MerchantItemOption.fromFirestore(
+        doc.id,
+        doc.data(),
+      ),
+    )
+        .toList();
+
+    items.sort((a, b) => a.name.compareTo(b.name));
+
     merchantItems
       ..clear()
-      ..addAll(
-        snapshot.docs.map(
-              (doc) => MerchantShopItemOption.fromFirestore(
-            doc.id,
-            doc.data(),
-          ),
-        ),
-      );
+      ..addAll(items);
   }
 
-  Future<void> _loadBundleDeals() async {
+  Future<void> _loadDeals() async {
     QuerySnapshot<Map<String, dynamic>> snapshot;
 
     try {
-      snapshot =
-      await _bundleDealsRef.orderBy('updatedAt', descending: true).get();
+      snapshot = await _freeDealsRef.orderBy('updatedAt', descending: true).get();
     } catch (_) {
-      snapshot = await _bundleDealsRef.get();
+      snapshot = await _freeDealsRef.get();
     }
 
     deals
       ..clear()
       ..addAll(
         snapshot.docs.map(
-              (doc) => MerchantBundleDealDraft.fromFirestore(
+              (doc) => MerchantFreeItemDealDraft.fromFirestore(
             doc.id,
             doc.data(),
           ),
@@ -294,34 +285,18 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
     titleController.text = currentDeal.title;
     subtitleController.text = currentDeal.subtitle;
     descriptionController.text = currentDeal.description;
-
-    oldPriceController.text = currentDeal.oldPrice == null
-        ? ''
-        : _formatPriceInput(currentDeal.oldPrice!);
-
-    newPriceController.text = currentDeal.newPrice == null
-        ? ''
-        : _formatPriceInput(currentDeal.newPrice!);
   }
 
   void _syncCurrentFromControllers() {
     currentDeal.title = titleController.text.trim().isEmpty
-        ? '2 für 1 Deal'
+        ? 'Kaufe X, erhalte Y gratis'
         : titleController.text.trim();
 
     currentDeal.subtitle = subtitleController.text.trim().isEmpty
-        ? 'Kaufe eins, erhalte eins dazu'
+        ? 'Gratis-Artikel beim Kauf'
         : subtitleController.text.trim();
 
     currentDeal.description = descriptionController.text.trim();
-
-    currentDeal.oldPrice = double.tryParse(
-      oldPriceController.text.trim().replaceAll(',', '.'),
-    );
-
-    currentDeal.newPrice = double.tryParse(
-      newPriceController.text.trim().replaceAll(',', '.'),
-    );
   }
 
   Future<void> _saveCurrentDeal() async {
@@ -337,8 +312,8 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
       return;
     }
 
-    if (currentDeal.getItemId.isEmpty) {
-      _showMessage('Bitte Erhalte-Artikel auswählen');
+    if (currentDeal.freeItemId.isEmpty) {
+      _showMessage('Bitte Gratis-Artikel auswählen');
       return;
     }
 
@@ -355,7 +330,7 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
     setState(() => isSaving = true);
 
     try {
-      final doc = _bundleDealsRef.doc(currentDeal.id);
+      final doc = _freeDealsRef.doc(currentDeal.id);
       final existingDoc = await doc.get();
 
       final data = currentDeal.toFirestoreMap(
@@ -372,17 +347,15 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
       if (!mounted) return;
 
       setState(() => isSaving = false);
-
       _showMessage('${currentDeal.title} gespeichert');
 
       await _loadEverything();
     } catch (error) {
-      debugPrint('Fehler beim Speichern: $error');
+      debugPrint('Fehler beim Speichern Free Item Deal: $error');
 
       if (!mounted) return;
 
       setState(() => isSaving = false);
-
       _showMessage('Speichern fehlgeschlagen');
     }
   }
@@ -409,7 +382,7 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
 
   Future<void> _deleteCurrentDeal() async {
     if (deals.length == 1) {
-      _showMessage('Mindestens ein Bundle Deal muss bleiben');
+      _showMessage('Mindestens eine Aktion muss bleiben');
       return;
     }
 
@@ -419,9 +392,9 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
       context: context,
       builder: (_) {
         return AlertDialog(
-          title: const Text('Deal löschen?'),
+          title: const Text('Aktion löschen?'),
           content: Text(
-            '„${dealToDelete.title}“ wird gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.',
+            '„${dealToDelete.title}“ wird gelöscht.',
           ),
           actions: [
             TextButton(
@@ -429,6 +402,10 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
               child: const Text('Abbrechen'),
             ),
             FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accentSoft,
+                foregroundColor: AppColors.black,
+              ),
               onPressed: () => Navigator.pop(context, true),
               child: const Text('Löschen'),
             ),
@@ -440,7 +417,7 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
     if (confirmed != true) return;
 
     try {
-      await _bundleDealsRef.doc(dealToDelete.id).delete();
+      await _freeDealsRef.doc(dealToDelete.id).delete();
 
       if (!mounted) return;
 
@@ -450,7 +427,7 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
         _syncControllersFromCurrent();
       });
 
-      _showMessage('Deal gelöscht');
+      _showMessage('Aktion gelöscht');
     } catch (error) {
       debugPrint('Fehler beim Löschen: $error');
       _showMessage('Löschen fehlgeschlagen');
@@ -497,6 +474,10 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.accentSoft,
+                      foregroundColor: AppColors.black,
+                    ),
                     onPressed: () => Navigator.pop(context),
                     child: const Text('Okay'),
                   ),
@@ -511,7 +492,7 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
           padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
           children: [
             Text(
-              isBuyItem ? 'Kauf-Artikel wählen' : 'Erhalte-Artikel wählen',
+              isBuyItem ? 'Kauf-Artikel wählen' : 'Gratis-Artikel wählen',
               style: const TextStyle(
                 color: AppColors.black,
                 fontSize: 22,
@@ -541,7 +522,7 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
                   subtitle: Text(
                     item.price == null
                         ? 'Preis nicht gesetzt'
-                        : '${_formatPriceInput(item.price!)} €',
+                        : '${_formatPrice(item.price!)} €',
                   ),
                   onTap: () {
                     setState(() {
@@ -549,8 +530,8 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
                         currentDeal.buyItemId = item.id;
                         currentDeal.buyItemName = item.name;
                       } else {
-                        currentDeal.getItemId = item.id;
-                        currentDeal.getItemName = item.name;
+                        currentDeal.freeItemId = item.id;
+                        currentDeal.freeItemName = item.name;
                       }
                     });
 
@@ -605,7 +586,7 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
     return '$day.$month.$year';
   }
 
-  String _formatPriceInput(double price) {
+  String _formatPrice(double price) {
     return price.toStringAsFixed(2).replaceAll('.', ',');
   }
 
@@ -619,22 +600,20 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
     );
   }
 
-  MerchantBundleDealDraft _defaultDeal() {
+  MerchantFreeItemDealDraft _defaultDeal() {
     final now = DateTime.now();
 
-    return MerchantBundleDealDraft(
+    return MerchantFreeItemDealDraft(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       merchantId: widget.merchantId,
       shopName: widget.shopName,
-      title: '2 für 1 Deal',
-      subtitle: 'Kaufe Artikel X und erhalte Artikel Y',
+      title: 'Kaufe X, erhalte Y gratis',
+      subtitle: 'Gratis-Artikel beim Kauf',
       description: '',
       buyItemId: '',
       buyItemName: 'Kauf-Artikel wählen',
-      getItemId: '',
-      getItemName: 'Erhalte-Artikel wählen',
-      oldPrice: null,
-      newPrice: null,
+      freeItemId: '',
+      freeItemName: 'Gratis-Artikel wählen',
       startDate: now,
       endDate: now.add(const Duration(days: 7)),
       isActive: false,
@@ -665,15 +644,13 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
             const SizedBox(height: 16),
             _heroCard(),
             const SizedBox(height: 12),
-            _sectionTitle('Artikel-Kombi'),
+            _sectionTitle('Gratis-Kombi'),
             const SizedBox(height: 10),
             _comboCard(),
             const SizedBox(height: 12),
             _mainInfoCard(),
             const SizedBox(height: 12),
             _dateCard(),
-            const SizedBox(height: 12),
-            _priceCard(),
             const SizedBox(height: 12),
             _descriptionCard(),
             const SizedBox(height: 18),
@@ -723,7 +700,7 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Bundle Deals',
+                'Gratis-Aktion',
                 style: TextStyle(
                   color: AppColors.black,
                   fontSize: 24,
@@ -732,7 +709,7 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
               ),
               SizedBox(height: 2),
               Text(
-                'Kombi-Angebote einfach erstellen',
+                'Kaufe Artikel X, erhalte Y gratis',
                 style: TextStyle(
                   color: AppColors.textMuted,
                   fontSize: 13,
@@ -775,7 +752,7 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
                     Icon(Icons.add_circle_outline_rounded),
                     SizedBox(height: 8),
                     Text(
-                      'Neuer Deal',
+                      'Neue Aktion',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontWeight: FontWeight.w900),
                     ),
@@ -815,7 +792,7 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Icon(
-                    Icons.local_offer_rounded,
+                    Icons.card_giftcard_rounded,
                     color: AppColors.black,
                   ),
                   const Spacer(),
@@ -879,18 +856,18 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
             width: 42,
             height: 42,
             decoration: const BoxDecoration(
-              color: AppColors.black,
+              color: AppColors.surface,
               shape: BoxShape.circle,
             ),
             child: const Icon(
-              Icons.add_rounded,
-              color: AppColors.white,
+              Icons.arrow_forward_rounded,
+              color: AppColors.black,
             ),
           ),
           const SizedBox(width: 12),
           _heroItemBox(
-            label: 'Erhalte',
-            title: currentDeal.getItemName,
+            label: 'Gratis',
+            title: currentDeal.freeItemName,
             icon: Icons.card_giftcard_rounded,
           ),
         ],
@@ -962,8 +939,8 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
           const Divider(),
           _pickerRow(
             icon: Icons.card_giftcard_outlined,
-            title: 'Erhalte Artikel',
-            value: currentDeal.getItemName,
+            title: 'Gratis Artikel',
+            value: currentDeal.freeItemName,
             onTap: () => _openItemPicker(isBuyItem: false),
           ),
         ],
@@ -1012,7 +989,7 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
             onChanged: (value) => currentDeal.title = value,
             decoration: const InputDecoration(
               labelText: 'Titel',
-              hintText: 'z. B. Shawarma 2 für 1',
+              hintText: 'z. B. Kaufe Shawarma, erhalte Ayran gratis',
               prefixIcon: Icon(Icons.title_rounded),
             ),
           ),
@@ -1062,62 +1039,6 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
                   value: _formatDate(currentDeal.endDate),
                   icon: Icons.stop_rounded,
                   onTap: () => _pickDate(isStart: false),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _priceCard() {
-    return _baseCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Preis',
-            style: TextStyle(
-              color: AppColors.black,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: oldPriceController,
-                  keyboardType: TextInputType.number,
-                  onChanged: (value) {
-                    currentDeal.oldPrice = double.tryParse(
-                      value.trim().replaceAll(',', '.'),
-                    );
-                  },
-                  decoration: const InputDecoration(
-                    labelText: 'Alter Preis',
-                    hintText: 'z. B. 14,00',
-                    prefixIcon: Icon(Icons.euro_rounded),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: newPriceController,
-                  keyboardType: TextInputType.number,
-                  onChanged: (value) {
-                    currentDeal.newPrice = double.tryParse(
-                      value.trim().replaceAll(',', '.'),
-                    );
-                  },
-                  decoration: const InputDecoration(
-                    labelText: 'Neuer Preis',
-                    hintText: 'z. B. 9,90',
-                    prefixIcon: Icon(Icons.sell_rounded),
-                  ),
                 ),
               ),
             ],
@@ -1220,6 +1141,10 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
       width: double.infinity,
       height: 56,
       child: FilledButton.icon(
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.accentSoft,
+          foregroundColor: AppColors.black,
+        ),
         onPressed: isSaving ? null : _saveCurrentDeal,
         icon: isSaving
             ? const SizedBox(
@@ -1229,7 +1154,7 @@ class _MerchantBundleDealsPageState extends State<MerchantBundleDealsPage> {
         )
             : const Icon(Icons.check_circle_rounded),
         label: Text(
-          isSaving ? 'Speichert...' : 'Speicheren',
+          isSaving ? 'Speichert...' : 'Aktuelle Aktion speichern',
           style: const TextStyle(
             fontWeight: FontWeight.w900,
             fontSize: 15,

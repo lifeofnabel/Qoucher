@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:qoucher/features/public_home/presentation/controllers/public_home_controller.dart';
 import 'package:qoucher/features/public_home/presentation/pages/merchant_detail_page.dart';
 import 'package:qoucher/features/public_home/presentation/pages/deals_pages.dart';
+import 'package:qoucher/router/route_names.dart';
 import 'deals_pages.dart';
 import 'merchant_detail_page.dart';
 
@@ -151,6 +152,28 @@ class _PublicHomePageState extends State<PublicHomePage> {
                   child: ElevatedButton(
                     onPressed: _applyFilters,
                     child: const Text('Filter anwenden'),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pushNamed(context, RouteNames.explorer);
+                    },
+                    icon: const Icon(Icons.explore_rounded),
+                    label: const Text(
+                      'Explorer öffnen',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF244D2C),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),
