@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+
 import 'package:qoucher/core/constants/app_colors.dart';
 
 class MerchantHappyHourDealDraft {
@@ -13,9 +16,60 @@ class MerchantHappyHourDealDraft {
     required this.selectedWeekdays,
     required this.startTime,
     required this.endTime,
+    required this.dealMode,
+    required this.discountPercent,
+    required this.freestyleText,
     required this.isActive,
     required this.isArchived,
   });
+
+  factory MerchantHappyHourDealDraft.fromFirestore(
+    String documentId,
+    Map<String, dynamic> data,
+  ) {
+    TimeOfDay parseTime(dynamic value, TimeOfDay fallback) {
+      if (value is Map) {
+        final hour = value['hour'];
+        final minute = value['minute'];
+
+        if (hour is int && minute is int) {
+          return TimeOfDay(hour: hour.clamp(0, 23), minute: minute.clamp(0, 59));
+        }
+      }
+
+      return fallback;
+    }
+
+    return MerchantHappyHourDealDraft(
+      id: data['id']?.toString() ?? documentId,
+      merchantId: data['merchantId']?.toString() ?? '',
+      shopName: data['merchantName']?.toString() ??
+          data['shopName']?.toString() ??
+          '',
+      title: data['title']?.toString() ?? 'Happy Hour',
+      subtitle: data['subtitle']?.toString() ?? 'Zeitlich begrenzte Aktion',
+      description: data['description']?.toString() ?? '',
+      selectedWeekdays: (data['selectedWeekdays'] as List?)
+              ?.map((item) => item is int ? item : int.tryParse(item.toString()))
+              .whereType<int>()
+              .where((item) => item >= 1 && item <= 7)
+              .toList() ??
+          [1, 2, 3, 4, 5],
+      startTime: parseTime(
+        data['startTime'],
+        const TimeOfDay(hour: 14, minute: 0),
+      ),
+      endTime: parseTime(
+        data['endTime'],
+        const TimeOfDay(hour: 17, minute: 0),
+      ),
+      dealMode: data['dealMode']?.toString() ?? 'percent',
+      discountPercent: (data['discountPercent'] as num?)?.toInt() ?? 20,
+      freestyleText: data['freestyleText']?.toString() ?? 'Alle ausgewählten Produkte günstiger',
+      isActive: data['isActive'] as bool? ?? false,
+      isArchived: data['isArchived'] as bool? ?? false,
+    );
+  }
 
   final String id;
 
@@ -26,68 +80,60 @@ class MerchantHappyHourDealDraft {
   String subtitle;
   String description;
 
-  List<int> selectedWeekdays; // 1 = Montag, 7 = Sonntag
-
+  List<int> selectedWeekdays;
   TimeOfDay startTime;
   TimeOfDay endTime;
+
+  String dealMode; // percent | text
+  int discountPercent;
+  String freestyleText;
 
   bool isActive;
   bool isArchived;
 
-  factory MerchantHappyHourDealDraft.fromFirestore(
-      String documentId,
-      Map<String, dynamic> data,
-      ) {
-    TimeOfDay parseTime(dynamic value, TimeOfDay fallback) {
-      if (value is Map) {
-        final hour = value['hour'];
-        final minute = value['minute'];
-
-        if (hour is int && minute is int) {
-          return TimeOfDay(hour: hour, minute: minute);
-        }
-      }
-
-      return fallback;
-    }
-
-    return MerchantHappyHourDealDraft(
-      id: data['id'] as String? ?? documentId,
-      merchantId: data['merchantId'] as String? ?? '',
-      shopName: data['shopName'] as String? ?? '',
-      title: data['title'] as String? ?? 'Happy Hour',
-      subtitle: data['subtitle'] as String? ?? 'Zeitlich begrenzte Aktion',
-      description: data['description'] as String? ?? '',
-      selectedWeekdays: (data['selectedWeekdays'] as List?)
-          ?.whereType<int>()
-          .toList() ??
-          [1, 2, 3, 4, 5],
-      startTime: parseTime(
-        data['startTime'],
-        const TimeOfDay(hour: 14, minute: 0),
-      ),
-      endTime: parseTime(
-        data['endTime'],
-        const TimeOfDay(hour: 17, minute: 0),
-      ),
-      isActive: data['isActive'] as bool? ?? false,
-      isArchived: data['isArchived'] as bool? ?? false,
-    );
+  bool get isOvernight {
+    final start = startTime.hour * 60 + startTime.minute;
+    final end = endTime.hour * 60 + endTime.minute;
+    return end < start;
   }
 
-  Map<String, dynamic> toFirestoreMap({
+  bool get hasValidTime {
+    final start = startTime.hour * 60 + startTime.minute;
+    final end = endTime.hour * 60 + endTime.minute;
+    return start != end;
+  }
+
+  bool get hasContent {
+    if (dealMode == 'percent') return discountPercent > 0;
+    return freestyleText.trim().isNotEmpty;
+  }
+
+  bool get canGoLive {
+    return title.trim().isNotEmpty &&
+        selectedWeekdays.isNotEmpty &&
+        hasValidTime &&
+        hasContent;
+  }
+
+  String get dealText {
+    if (dealMode == 'percent') return '$discountPercent% Rabatt';
+    return freestyleText.trim().isEmpty ? 'Happy Hour Angebot' : freestyleText.trim();
+  }
+
+  Map<String, dynamic> toFeedMap({
     required String merchantId,
     required String shopName,
   }) {
     return {
       'id': id,
       'merchantId': merchantId,
+      'merchantName': shopName,
       'shopName': shopName,
-      'type': 'happy_hour_deal',
-      'title': title,
-      'subtitle': subtitle,
-      'description': description,
-      'selectedWeekdays': selectedWeekdays,
+      'type': 'happy_hour',
+      'title': title.trim().isEmpty ? 'Happy Hour' : title.trim(),
+      'subtitle': subtitle.trim(),
+      'description': description.trim(),
+      'selectedWeekdays': selectedWeekdays..sort(),
       'startTime': {
         'hour': startTime.hour,
         'minute': startTime.minute,
@@ -96,26 +142,15 @@ class MerchantHappyHourDealDraft {
         'hour': endTime.hour,
         'minute': endTime.minute,
       },
+      'allowsOvernight': isOvernight,
+      'dealMode': dealMode,
+      'discountPercent': discountPercent,
+      'freestyleText': freestyleText.trim(),
+      'dealText': dealText,
       'isActive': isActive,
       'isArchived': isArchived,
       'updatedAt': FieldValue.serverTimestamp(),
     };
-  }
-
-  MerchantHappyHourDealDraft copyWithNewId() {
-    return MerchantHappyHourDealDraft(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      merchantId: merchantId,
-      shopName: shopName,
-      title: '$title Kopie',
-      subtitle: subtitle,
-      description: description,
-      selectedWeekdays: [...selectedWeekdays],
-      startTime: startTime,
-      endTime: endTime,
-      isActive: false,
-      isArchived: false,
-    );
   }
 }
 
@@ -141,230 +176,776 @@ class _MerchantHappyHourDealsPageState
   final List<MerchantHappyHourDealDraft> deals = [];
 
   int selectedIndex = 0;
-
   bool isLoading = true;
   bool isSaving = false;
 
-  final TextEditingController titleController = TextEditingController();
-  final TextEditingController subtitleController = TextEditingController();
-  final TextEditingController descriptionController = TextEditingController();
+  Timer? _saveTimer;
+
+  final titleController = TextEditingController();
+  final subtitleController = TextEditingController();
+  final descriptionController = TextEditingController();
+  final freestyleController = TextEditingController();
 
   MerchantHappyHourDealDraft get currentDeal => deals[selectedIndex];
 
-  CollectionReference<Map<String, dynamic>> get _happyHourDealsRef {
-    return _firestore
-        .collection('merchants')
-        .doc(widget.merchantId)
-        .collection('happyHourDeals');
+  CollectionReference<Map<String, dynamic>> get _feedRef {
+    return _firestore.collection('feed');
   }
 
   @override
   void initState() {
     super.initState();
-    _loadDeals();
+    _loadData();
   }
 
   @override
   void dispose() {
+    _saveTimer?.cancel();
     titleController.dispose();
     subtitleController.dispose();
     descriptionController.dispose();
+    freestyleController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadDeals() async {
+  Future<void> _loadData() async {
     setState(() => isLoading = true);
 
     try {
       QuerySnapshot<Map<String, dynamic>> snapshot;
 
       try {
-        snapshot = await _happyHourDealsRef
+        snapshot = await _feedRef
+            .where('merchantId', isEqualTo: widget.merchantId)
+            .where('type', isEqualTo: 'happy_hour')
             .orderBy('updatedAt', descending: true)
+            .limit(1)
             .get();
       } catch (_) {
-        snapshot = await _happyHourDealsRef.get();
+        snapshot = await _feedRef
+            .where('merchantId', isEqualTo: widget.merchantId)
+            .where('type', isEqualTo: 'happy_hour')
+            .limit(1)
+            .get();
       }
 
       deals
         ..clear()
         ..addAll(
           snapshot.docs.map(
-                (doc) => MerchantHappyHourDealDraft.fromFirestore(
-              doc.id,
-              doc.data(),
-            ),
+            (doc) => MerchantHappyHourDealDraft.fromFirestore(doc.id, doc.data()),
           ),
         );
 
       if (deals.isEmpty) {
-        deals.add(_defaultDeal());
+        final draft = _defaultDeal();
+        deals.add(draft);
+        await _saveDeal(draft, silent: true);
       }
 
       selectedIndex = 0;
       _syncControllersFromCurrent();
-
-      if (!mounted) return;
-      setState(() => isLoading = false);
-    } catch (error) {
-      debugPrint('Fehler beim Laden Happy Hour: $error');
-
+    } catch (_) {
       if (deals.isEmpty) {
         deals.add(_defaultDeal());
         selectedIndex = 0;
         _syncControllersFromCurrent();
       }
 
-      if (!mounted) return;
-      setState(() => isLoading = false);
-      _showMessage('Happy Hour konnte nicht geladen werden');
+      _showMessage('Happy Hour konnte nicht geladen werden', error: true);
     }
+
+    if (mounted) setState(() => isLoading = false);
   }
 
   void _syncControllersFromCurrent() {
     titleController.text = currentDeal.title;
     subtitleController.text = currentDeal.subtitle;
     descriptionController.text = currentDeal.description;
+    freestyleController.text = currentDeal.freestyleText;
   }
 
   void _syncCurrentFromControllers() {
-    currentDeal.title = titleController.text.trim().isEmpty
-        ? 'Happy Hour'
-        : titleController.text.trim();
-
-    currentDeal.subtitle = subtitleController.text.trim().isEmpty
-        ? 'Zeitlich begrenzte Aktion'
-        : subtitleController.text.trim();
-
+    currentDeal.title = titleController.text.trim();
+    currentDeal.subtitle = subtitleController.text.trim();
     currentDeal.description = descriptionController.text.trim();
+    currentDeal.freestyleText = freestyleController.text.trim();
   }
 
-  Future<void> _saveCurrentDeal() async {
+  void _scheduleSave() {
     _syncCurrentFromControllers();
 
-    if (currentDeal.title.trim().isEmpty) {
-      _showMessage('Bitte Titel eingeben');
-      return;
-    }
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 650), () {
+      _saveCurrent(silent: true);
+    });
+  }
 
-    if (currentDeal.selectedWeekdays.isEmpty) {
-      _showMessage('Bitte mindestens einen Tag auswählen');
-      return;
-    }
+  Future<void> _saveCurrent({bool silent = false}) async {
+    _syncCurrentFromControllers();
+    await _saveDeal(currentDeal, silent: silent);
+  }
 
-    if (!_isValidTimeRange()) {
-      _showMessage('Endzeit muss nach Startzeit liegen');
-      return;
-    }
+  Future<void> _saveDeal(
+    MerchantHappyHourDealDraft deal, {
+    bool silent = false,
+  }) async {
+    if (!mounted) return;
 
     setState(() => isSaving = true);
 
     try {
-      final doc = _happyHourDealsRef.doc(currentDeal.id);
-      final existingDoc = await doc.get();
+      if (deal.isActive && !deal.canGoLive) {
+        deal.isActive = false;
+        _showMessage(
+          'Live geht erst, wenn Tage, Uhrzeit, Titel und Inhalt vollständig sind',
+          error: true,
+        );
+      }
 
-      final data = currentDeal.toFirestoreMap(
+      final docRef = _feedRef.doc(deal.id);
+      final exists = (await docRef.get()).exists;
+
+      final data = deal.toFeedMap(
         merchantId: widget.merchantId,
         shopName: widget.shopName,
       );
 
-      if (!existingDoc.exists) {
+      if (!exists) {
         data['createdAt'] = FieldValue.serverTimestamp();
       }
 
-      await doc.set(data, SetOptions(merge: true));
+      await docRef.set(data, SetOptions(merge: true));
 
-      if (!mounted) return;
-
-      setState(() => isSaving = false);
-      _showMessage('${currentDeal.title} gespeichert');
-
-      await _loadDeals();
-    } catch (error) {
-      debugPrint('Fehler beim Speichern Happy Hour: $error');
-
-      if (!mounted) return;
-
-      setState(() => isSaving = false);
-      _showMessage('Speichern fehlgeschlagen');
+      if (!silent) {
+        _showMessage('${deal.title.isEmpty ? 'Happy Hour' : deal.title} gespeichert');
+      }
+    } catch (_) {
+      _showMessage('Speichern fehlgeschlagen', error: true);
     }
+
+    if (mounted) setState(() => isSaving = false);
   }
 
-  void _createNewDeal() {
-    _syncCurrentFromControllers();
-
-    setState(() {
-      deals.add(_defaultDeal());
-      selectedIndex = deals.length - 1;
-      _syncControllersFromCurrent();
-    });
+  void _tryCreateNewDeal() {
+    _showMessage(
+      'Zurzeit ist das Veröffentlichen nur von einer Happy Hour in dieser Branche möglich.',
+      error: true,
+    );
   }
 
-  void _duplicateCurrentDeal() {
-    _syncCurrentFromControllers();
+  void _openDeleteSheet() {
+    _darkSheet(
+      title: 'Happy Hour löschen',
+      subtitle: 'Dieser Feed-Post wird entfernt.',
+      child: Column(
+        children: [
+          _lightButton(
+            text: 'Ja, weiter',
+            onTap: () {
+              Navigator.pop(context);
+              _openFinalDeleteSheet();
+            },
+          ),
+        ],
+      ),
+    );
+  }
 
-    setState(() {
-      deals.add(currentDeal.copyWithNewId());
-      selectedIndex = deals.length - 1;
-      _syncControllersFromCurrent();
-    });
+  void _openFinalDeleteSheet() {
+    _darkSheet(
+      title: 'Wirklich löschen?',
+      subtitle: 'Letzte Warnung. Die Happy Hour verschwindet aus dem Feed.',
+      child: _dangerButton(
+        text: 'Endgültig löschen',
+        onTap: () async {
+          Navigator.pop(context);
+          await _deleteCurrentDeal();
+        },
+      ),
+    );
   }
 
   Future<void> _deleteCurrentDeal() async {
-    if (deals.length == 1) {
-      _showMessage('Mindestens eine Happy Hour muss bleiben');
-      return;
-    }
-
-    final dealToDelete = currentDeal;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) {
-        return AlertDialog(
-          title: const Text('Happy Hour löschen?'),
-          content: Text('„${dealToDelete.title}“ wird gelöscht.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Abbrechen'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.accentSoft,
-                foregroundColor: AppColors.black,
-              ),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Löschen'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true) return;
+    final deal = currentDeal;
 
     try {
-      await _happyHourDealsRef.doc(dealToDelete.id).delete();
+      await _feedRef.doc(deal.id).delete();
 
-      if (!mounted) return;
+      final draft = _defaultDeal();
+      deals
+        ..clear()
+        ..add(draft);
+      selectedIndex = 0;
+      _syncControllersFromCurrent();
 
-      setState(() {
-        deals.removeWhere((deal) => deal.id == dealToDelete.id);
-        selectedIndex = selectedIndex.clamp(0, deals.length - 1);
-        _syncControllersFromCurrent();
-      });
+      await _saveDeal(draft, silent: true);
 
-      _showMessage('Happy Hour gelöscht');
-    } catch (error) {
-      debugPrint('Fehler beim Löschen: $error');
-      _showMessage('Löschen fehlgeschlagen');
+      if (mounted) setState(() {});
+      _showMessage('Happy Hour gelöscht. Neuer Entwurf wurde vorbereitet.');
+    } catch (_) {
+      _showMessage('Löschen fehlgeschlagen', error: true);
     }
   }
 
-  Future<void> _pickTime({
-    required bool isStart,
-  }) async {
+  MerchantHappyHourDealDraft _defaultDeal() {
+    return MerchantHappyHourDealDraft(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      merchantId: widget.merchantId,
+      shopName: widget.shopName,
+      title: 'Happy Hour',
+      subtitle: 'Zeitlich begrenzte Aktion',
+      description: '',
+      selectedWeekdays: [1, 2, 3, 4, 5],
+      startTime: const TimeOfDay(hour: 14, minute: 0),
+      endTime: const TimeOfDay(hour: 17, minute: 0),
+      dealMode: 'percent',
+      discountPercent: 20,
+      freestyleText: 'Alle ausgewählten Produkte günstiger',
+      isActive: false,
+      isArchived: false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.black),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: RefreshIndicator(
+          color: AppColors.black,
+          backgroundColor: AppColors.surface,
+          onRefresh: _loadData,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+            children: [
+              _hero(),
+              const SizedBox(height: 16),
+              _limitStrip(),
+              const SizedBox(height: 16),
+              _feedPreview(),
+              const SizedBox(height: 16),
+              _quickStatus(),
+              const SizedBox(height: 22),
+              _sectionTitle(
+                'Wann läuft sie?',
+                'Wochentage und Uhrzeit. Nachtfenster wie 22:00–02:00 sind erlaubt.',
+              ),
+              const SizedBox(height: 12),
+              _timePanel(),
+              const SizedBox(height: 22),
+              _sectionTitle(
+                'Was passiert in der Happy Hour?',
+                'Entweder Prozent-Rabatt oder freier Text.',
+              ),
+              const SizedBox(height: 12),
+              _contentPanel(),
+              const SizedBox(height: 22),
+              _sectionTitle(
+                'Wie soll der Post klingen?',
+                'Titel, Untertitel und Beschreibung.',
+              ),
+              const SizedBox(height: 12),
+              _textPanel(),
+              const SizedBox(height: 22),
+              _managePanel(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _hero() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.black,
+        borderRadius: BorderRadius.circular(38),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadowStrong,
+            blurRadius: 26,
+            offset: Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _heroButton(
+                icon: Icons.arrow_back_rounded,
+                onTap: () => Navigator.pop(context),
+              ),
+              const Spacer(),
+              if (isSaving)
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    color: AppColors.white,
+                    strokeWidth: 2.2,
+                  ),
+                )
+              else
+                _heroPill(currentDeal.isActive ? 'Live' : 'Entwurf'),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Happy Hour Builder',
+            style: TextStyle(
+              color: AppColors.textOnDark,
+              fontSize: 37,
+              height: 0.95,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -1.7,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Tage, Uhrzeit und Aktion setzen. Der Feed zeigt automatisch, wann es heiß wird.',
+            style: TextStyle(
+              color: AppColors.textDisabled,
+              fontSize: 14,
+              height: 1.3,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 22),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _darkChip('type: happy_hour'),
+              _darkChip(_weekdayLongList()),
+              _darkChip(_timeRangeText()),
+              _darkChip(currentDeal.isOvernight ? 'über Nacht' : 'gleicher Tag'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _limitStrip() {
+    return GestureDetector(
+      onTap: _tryCreateNewDeal,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.lock_outline_rounded, color: AppColors.black),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Aktuell ist nur eine Happy Hour in dieser Branche möglich.',
+                style: TextStyle(
+                  color: AppColors.black,
+                  fontWeight: FontWeight.w900,
+                  height: 1.25,
+                ),
+              ),
+            ),
+            Icon(Icons.add_circle_outline_rounded, color: AppColors.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _feedPreview() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(34),
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: 22,
+            offset: Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.black,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(Icons.storefront_rounded, color: AppColors.white),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.shopName,
+                      style: const TextStyle(
+                        color: AppColors.black,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      currentDeal.isActive ? 'Aktive Happy Hour' : 'Entwurf',
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.more_horiz_rounded, color: AppColors.textMuted),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Text(
+            currentDeal.title.trim().isEmpty ? 'Happy Hour' : currentDeal.title,
+            style: const TextStyle(
+              color: AppColors.black,
+              fontSize: 30,
+              height: 0.95,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -1.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            currentDeal.subtitle.trim().isEmpty
+                ? 'Zeitlich begrenzte Aktion'
+                : currentDeal.subtitle,
+            style: const TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 14,
+              height: 1.3,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: _previewBox(
+                  label: 'Zeit',
+                  title: '${_weekdayLongList()}\n${_timeRangeText()}',
+                  icon: Icons.schedule_rounded,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: const BoxDecoration(
+                  color: AppColors.black,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.local_fire_department_rounded, color: AppColors.white),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _previewBox(
+                  label: 'Aktion',
+                  title: currentDeal.dealText,
+                  icon: Icons.percent_rounded,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _softChip(currentDeal.dealText),
+              _softChip(_weekdayLongList()),
+              _softChip(_timeRangeText()),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _quickStatus() {
+    return Row(
+      children: [
+        Expanded(
+          child: _quickPill(
+            icon: currentDeal.isActive ? Icons.bolt_rounded : Icons.pause_rounded,
+            title: currentDeal.isActive ? 'Live' : 'Entwurf',
+            onTap: () async {
+              if (!currentDeal.isActive && !currentDeal.canGoLive) {
+                _showMessage('Erst Tage, Uhrzeit, Inhalt und Titel ausfüllen', error: true);
+                return;
+              }
+
+              setState(() => currentDeal.isActive = !currentDeal.isActive);
+              await _saveCurrent(silent: true);
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _quickPill(
+            icon: currentDeal.isArchived ? Icons.inventory_2_rounded : Icons.public_rounded,
+            title: currentDeal.isArchived ? 'Archiv' : 'Feed',
+            onTap: () async {
+              setState(() {
+                currentDeal.isArchived = !currentDeal.isArchived;
+                if (currentDeal.isArchived) currentDeal.isActive = false;
+              });
+
+              await _saveCurrent(silent: true);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _timePanel() {
+    return _basePanel(
+      children: [
+        _weekdayPicker(),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _timeButton(
+                title: 'Start',
+                value: _formatTime(currentDeal.startTime),
+                icon: Icons.play_arrow_rounded,
+                onTap: () => _pickTime(isStart: true),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _timeButton(
+                title: 'Ende',
+                value: _formatTime(currentDeal.endTime),
+                icon: Icons.stop_rounded,
+                onTap: () => _pickTime(isStart: false),
+              ),
+            ),
+          ],
+        ),
+        if (currentDeal.isOvernight) ...[
+          const SizedBox(height: 12),
+          _smallInfo('Läuft über Nacht. Beispiel: 22:00–02:00.'),
+        ],
+      ],
+    );
+  }
+
+  Widget _weekdayPicker() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: List.generate(7, (index) {
+        final weekday = index + 1;
+        final selected = currentDeal.selectedWeekdays.contains(weekday);
+
+        return GestureDetector(
+          onTap: () async {
+            setState(() {
+              if (selected) {
+                currentDeal.selectedWeekdays.remove(weekday);
+              } else {
+                currentDeal.selectedWeekdays.add(weekday);
+                currentDeal.selectedWeekdays.sort();
+              }
+            });
+
+            await _saveCurrent(silent: true);
+          },
+          child: Container(
+            width: 46,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected ? AppColors.black : AppColors.inputFill,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: selected ? AppColors.black : AppColors.border),
+            ),
+            child: Text(
+              _weekdayShort(weekday),
+              style: TextStyle(
+                color: selected ? AppColors.white : AppColors.textMuted,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _contentPanel() {
+    return _basePanel(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _modeTile(
+                icon: Icons.percent_rounded,
+                title: 'Rabatt %',
+                selected: currentDeal.dealMode == 'percent',
+                onTap: () async {
+                  setState(() => currentDeal.dealMode = 'percent');
+                  await _saveCurrent(silent: true);
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _modeTile(
+                icon: Icons.edit_note_rounded,
+                title: 'Freitext',
+                selected: currentDeal.dealMode == 'text',
+                onTap: () async {
+                  setState(() => currentDeal.dealMode = 'text');
+                  await _saveCurrent(silent: true);
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        if (currentDeal.dealMode == 'percent') _percentPicker() else _freestyleInput(),
+      ],
+    );
+  }
+
+  Widget _percentPicker() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.inputFill,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          const Text(
+            'Rabatt',
+            style: TextStyle(
+              color: AppColors.black,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Expanded(
+            child: Slider(
+              value: currentDeal.discountPercent.toDouble().clamp(5, 80),
+              min: 5,
+              max: 80,
+              divisions: 15,
+              label: '${currentDeal.discountPercent}%',
+              onChanged: (value) async {
+                setState(() => currentDeal.discountPercent = value.round());
+                _scheduleSave();
+              },
+            ),
+          ),
+          Text(
+            '${currentDeal.discountPercent}%',
+            style: const TextStyle(
+              color: AppColors.black,
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _freestyleInput() {
+    return _input(
+      controller: freestyleController,
+      hint: 'z. B. Alle Wraps günstiger',
+      icon: Icons.local_fire_department_rounded,
+      onChanged: (_) => _scheduleSave(),
+    );
+  }
+
+  Widget _textPanel() {
+    return _basePanel(
+      children: [
+        _input(
+          controller: titleController,
+          hint: 'Titel, z. B. Happy Hour Shawarma',
+          icon: Icons.title_rounded,
+          onChanged: (_) => _scheduleSave(),
+        ),
+        const SizedBox(height: 10),
+        _input(
+          controller: subtitleController,
+          hint: 'Untertitel, z. B. Jeden Freitag 14–17 Uhr',
+          icon: Icons.short_text_rounded,
+          onChanged: (_) => _scheduleSave(),
+        ),
+        const SizedBox(height: 10),
+        _input(
+          controller: descriptionController,
+          hint: 'Beschreibung optional',
+          icon: Icons.notes_rounded,
+          maxLines: 3,
+          onChanged: (_) => _scheduleSave(),
+        ),
+      ],
+    );
+  }
+
+  Widget _managePanel() {
+    return _basePanel(
+      children: [
+        _manageRow(
+          icon: Icons.add_circle_outline_rounded,
+          title: 'Neue Happy Hour hinzufügen',
+          subtitle: 'Zurzeit auf eine Happy Hour limitiert.',
+          onTap: _tryCreateNewDeal,
+        ),
+        const Divider(height: 18, color: AppColors.divider),
+        _manageRow(
+          icon: Icons.delete_forever_rounded,
+          title: 'Happy Hour löschen',
+          subtitle: 'Zwei Fragen, dann weg.',
+          onTap: _openDeleteSheet,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickTime({required bool isStart}) async {
     final picked = await showTimePicker(
       context: context,
       initialTime: isStart ? currentDeal.startTime : currentDeal.endTime,
@@ -379,448 +960,40 @@ class _MerchantHappyHourDealsPageState
         currentDeal.endTime = picked;
       }
     });
+
+    await _saveCurrent(silent: true);
   }
 
-  void _toggleWeekday(int weekday) {
-    setState(() {
-      if (currentDeal.selectedWeekdays.contains(weekday)) {
-        currentDeal.selectedWeekdays.remove(weekday);
-      } else {
-        currentDeal.selectedWeekdays.add(weekday);
-        currentDeal.selectedWeekdays.sort();
-      }
-    });
-  }
-
-  bool _isValidTimeRange() {
-    final start = currentDeal.startTime.hour * 60 + currentDeal.startTime.minute;
-    final end = currentDeal.endTime.hour * 60 + currentDeal.endTime.minute;
-
-    return end > start;
-  }
-
-  String _formatTime(TimeOfDay time) {
-    final hour = time.hour.toString().padLeft(2, '0');
-    final minute = time.minute.toString().padLeft(2, '0');
-
-    return '$hour:$minute';
-  }
-
-  String _weekdayShort(int weekday) {
-    switch (weekday) {
-      case 1:
-        return 'Mo';
-      case 2:
-        return 'Di';
-      case 3:
-        return 'Mi';
-      case 4:
-        return 'Do';
-      case 5:
-        return 'Fr';
-      case 6:
-        return 'Sa';
-      case 7:
-        return 'So';
-      default:
-        return '?';
-    }
-  }
-
-  String _weekdayLongList() {
-    if (currentDeal.selectedWeekdays.length == 7) {
-      return 'Jeden Tag';
-    }
-
-    if (currentDeal.selectedWeekdays.isEmpty) {
-      return 'Keine Tage ausgewählt';
-    }
-
-    return currentDeal.selectedWeekdays.map(_weekdayShort).join(', ');
-  }
-
-  void _showMessage(String message) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-
-  MerchantHappyHourDealDraft _defaultDeal() {
-    return MerchantHappyHourDealDraft(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      merchantId: widget.merchantId,
-      shopName: widget.shopName,
-      title: 'Happy Hour',
-      subtitle: 'Zeitlich begrenzte Aktion',
-      description: '',
-      selectedWeekdays: [1, 2, 3, 4, 5],
-      startTime: const TimeOfDay(hour: 14, minute: 0),
-      endTime: const TimeOfDay(hour: 17, minute: 0),
-      isActive: false,
-      isArchived: false,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Scaffold(
-        backgroundColor: AppColors.background,
-        body: Center(
-          child: CircularProgressIndicator(),
+  Widget _modeTile({
+    required IconData icon,
+    required String title,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 98,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.black : AppColors.inputFill,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: selected ? AppColors.black : AppColors.border),
         ),
-      );
-    }
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _topBar(),
-            const SizedBox(height: 14),
-            _dealsSwitcher(),
-            const SizedBox(height: 16),
-            _heroCard(),
-            const SizedBox(height: 12),
-            _sectionTitle('Zeitfenster'),
-            const SizedBox(height: 10),
-            _weekdayCard(),
-            const SizedBox(height: 12),
-            _timeCard(),
-            const SizedBox(height: 12),
-            _mainInfoCard(),
-            const SizedBox(height: 12),
-            _descriptionCard(),
-            const SizedBox(height: 18),
-            _sectionTitle('Sichtbarkeit'),
-            const SizedBox(height: 10),
-            _statusCard(),
-            const SizedBox(height: 18),
-            _quickActionsCard(),
-            const SizedBox(height: 24),
-            _saveButton(),
+            Icon(icon, color: selected ? AppColors.white : AppColors.black),
+            const Spacer(),
+            Text(
+              title,
+              style: TextStyle(
+                color: selected ? AppColors.white : AppColors.black,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _topBar() {
-    return Row(
-      children: [
-        InkWell(
-          onTap: () => Navigator.of(context).pop(),
-          borderRadius: BorderRadius.circular(18),
-          child: Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.border),
-              boxShadow: const [
-                BoxShadow(
-                  color: AppColors.shadow,
-                  blurRadius: 12,
-                  offset: Offset(0, 6),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.arrow_back_rounded,
-              color: AppColors.black,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Happy Hour',
-                style: TextStyle(
-                  color: AppColors.black,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              SizedBox(height: 2),
-              Text(
-                'Tage und Uhrzeiten einfach steuern',
-                style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _dealsSwitcher() {
-    return SizedBox(
-      height: 104,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: deals.length + 1,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          if (index == deals.length) {
-            return InkWell(
-              onTap: _createNewDeal,
-              borderRadius: BorderRadius.circular(22),
-              child: Container(
-                width: 120,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.surface.withOpacity(0.45),
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(
-                    color: AppColors.border,
-                    width: 1.2,
-                  ),
-                ),
-                child: const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.add_circle_outline_rounded),
-                    SizedBox(height: 8),
-                    Text(
-                      'Neue Zeit',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          final deal = deals[index];
-          final selected = index == selectedIndex;
-
-          return InkWell(
-            onTap: () {
-              _syncCurrentFromControllers();
-
-              setState(() {
-                selectedIndex = index;
-                _syncControllersFromCurrent();
-              });
-            },
-            borderRadius: BorderRadius.circular(22),
-            child: Container(
-              width: 158,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: selected
-                    ? AppColors.accentSoft
-                    : AppColors.surface.withOpacity(0.88),
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(
-                  color: selected ? AppColors.accent : AppColors.border,
-                  width: selected ? 1.4 : 1,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(
-                    Icons.access_time_filled_rounded,
-                    color: AppColors.black,
-                  ),
-                  const Spacer(),
-                  Text(
-                    deal.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.black,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    deal.isActive ? 'Aktiv' : 'Pausiert',
-                    style: TextStyle(
-                      color:
-                      deal.isActive ? AppColors.black : AppColors.textMuted,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _heroCard() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.accentSoft,
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(
-          color: AppColors.accent,
-          width: 1.4,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: AppColors.shadow,
-            blurRadius: 24,
-            offset: Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 68,
-            height: 68,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: const Icon(
-              Icons.access_time_filled_rounded,
-              color: AppColors.black,
-              size: 34,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  currentDeal.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.black,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  '${_weekdayLongList()} · ${_formatTime(currentDeal.startTime)}–${_formatTime(currentDeal.endTime)}',
-                  style: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _weekdayCard() {
-    return _baseCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Tage auswählen',
-            style: TextStyle(
-              color: AppColors.black,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: List.generate(7, (index) {
-              final weekday = index + 1;
-              final selected = currentDeal.selectedWeekdays.contains(weekday);
-
-              return InkWell(
-                onTap: () => _toggleWeekday(weekday),
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: 46,
-                  height: 42,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: selected ? AppColors.accentSoft : AppColors.inputFill,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: selected ? AppColors.accent : AppColors.border,
-                      width: selected ? 1.4 : 1,
-                    ),
-                  ),
-                  child: Text(
-                    _weekdayShort(weekday),
-                    style: TextStyle(
-                      color: selected ? AppColors.black : AppColors.textMuted,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _timeCard() {
-    return _baseCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Uhrzeit',
-            style: TextStyle(
-              color: AppColors.black,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _timeButton(
-                  title: 'Start',
-                  value: _formatTime(currentDeal.startTime),
-                  icon: Icons.play_arrow_rounded,
-                  onTap: () => _pickTime(isStart: true),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _timeButton(
-                  title: 'Ende',
-                  value: _formatTime(currentDeal.endTime),
-                  icon: Icons.stop_rounded,
-                  onTap: () => _pickTime(isStart: false),
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -831,17 +1004,14 @@ class _MerchantHappyHourDealsPageState
     required IconData icon,
     required VoidCallback onTap,
   }) {
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.inputFill,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: AppColors.border,
-          ),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppColors.border),
         ),
         child: Column(
           children: [
@@ -870,43 +1040,42 @@ class _MerchantHappyHourDealsPageState
     );
   }
 
-  Widget _mainInfoCard() {
-    return _baseCard(
+  Widget _previewBox({
+    required String label,
+    required String title,
+    required IconData icon,
+  }) {
+    return Container(
+      height: 132,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: AppColors.inputFill,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: AppColors.border),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text(
-            'Titel & Untertitel',
-            style: TextStyle(
-              color: AppColors.black,
-              fontSize: 16,
+          Icon(icon, color: AppColors.black, size: 30),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textMuted,
               fontWeight: FontWeight.w900,
+              fontSize: 12,
             ),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: titleController,
-            onChanged: (value) {
-              currentDeal.title = value;
-              setState(() {});
-            },
-            decoration: const InputDecoration(
-              labelText: 'Titel',
-              hintText: 'z. B. Happy Hour Shawarma',
-              prefixIcon: Icon(Icons.title_rounded),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: subtitleController,
-            onChanged: (value) {
-              currentDeal.subtitle = value;
-              setState(() {});
-            },
-            decoration: const InputDecoration(
-              labelText: 'Untertitel',
-              hintText: 'z. B. Jeden Freitag 14–17 Uhr',
-              prefixIcon: Icon(Icons.short_text_rounded),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: AppColors.black,
+              fontWeight: FontWeight.w900,
+              fontSize: 13,
             ),
           ),
         ],
@@ -914,175 +1083,404 @@ class _MerchantHappyHourDealsPageState
     );
   }
 
-  Widget _descriptionCard() {
-    return _baseCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Beschreibung',
-            style: TextStyle(
-              color: AppColors.black,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: descriptionController,
-            onChanged: (value) => currentDeal.description = value,
-            minLines: 4,
-            maxLines: 7,
-            decoration: const InputDecoration(
-              labelText: 'Beschreibung',
-              hintText: 'Was gilt in dieser Happy Hour?',
-              alignLabelWithHint: true,
-              prefixIcon: Icon(Icons.notes_rounded),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _statusCard() {
-    return _baseCard(
-      child: Row(
-        children: [
-          _iconBox(
-            icon: currentDeal.isActive
-                ? Icons.visibility_rounded
-                : Icons.visibility_off_rounded,
-            bg: currentDeal.isActive ? AppColors.accentSoft : AppColors.inputFill,
-            fg: AppColors.black,
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'Happy Hour aktiv',
-              style: TextStyle(
+  Widget _quickPill({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 76,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: AppColors.black, size: 21),
+            const Spacer(),
+            Text(
+              title,
+              style: const TextStyle(
                 color: AppColors.black,
-                fontSize: 16,
+                fontSize: 12,
                 fontWeight: FontWeight.w900,
               ),
             ),
-          ),
-          Switch(
-            value: currentDeal.isActive,
-            onChanged: (value) {
-              setState(() => currentDeal.isActive = value);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _quickActionsCard() {
-    return _baseCard(
-      child: Row(
-        children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: _duplicateCurrentDeal,
-              icon: const Icon(Icons.copy_rounded),
-              label: const Text('Duplizieren'),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: _deleteCurrentDeal,
-              icon: const Icon(Icons.delete_outline_rounded),
-              label: const Text('Löschen'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _saveButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: FilledButton.icon(
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.accentSoft,
-          foregroundColor: AppColors.black,
+          ],
         ),
-        onPressed: isSaving ? null : _saveCurrentDeal,
-        icon: isSaving
-            ? const SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        )
-            : const Icon(Icons.check_circle_rounded),
-        label: Text(
-          isSaving ? 'Speichert...' : 'Happy Hour speichern',
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String title, String subtitle) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
           style: const TextStyle(
+            color: AppColors.black,
+            fontSize: 24,
             fontWeight: FontWeight.w900,
-            fontSize: 15,
+            letterSpacing: -0.8,
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _sectionTitle(String title) {
-    return Text(
-      title,
-      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-        fontWeight: FontWeight.w900,
-      ),
-    );
-  }
-
-  Widget _iconBox({
-    required IconData icon,
-    required Color bg,
-    required Color fg,
-  }) {
-    return Container(
-      width: 46,
-      height: 46,
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.border,
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            color: AppColors.textMuted,
+            fontSize: 13,
+            height: 1.3,
+            fontWeight: FontWeight.w700,
+          ),
         ),
-      ),
-      child: Icon(
-        icon,
-        color: fg,
-        size: 24,
-      ),
+      ],
     );
   }
 
-  Widget _baseCard({
-    required Widget child,
-  }) {
+  Widget _basePanel({required List<Widget> children}) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: AppColors.border,
-          width: 1.05,
-        ),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: AppColors.border),
         boxShadow: const [
           BoxShadow(
             color: AppColors.shadow,
-            blurRadius: 16,
-            offset: Offset(0, 8),
+            blurRadius: 18,
+            offset: Offset(0, 9),
           ),
         ],
       ),
-      child: child,
+      child: Column(children: children),
     );
+  }
+
+  Widget _input({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    int maxLines = 1,
+    ValueChanged<String>? onChanged,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      onChanged: onChanged,
+      style: const TextStyle(
+        color: AppColors.black,
+        fontWeight: FontWeight.w800,
+      ),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: AppColors.textDisabled),
+        prefixIcon: Icon(icon, color: AppColors.textMuted),
+        filled: true,
+        fillColor: AppColors.inputFill,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(22),
+          borderSide: BorderSide.none,
+        ),
+      ),
+    );
+  }
+
+  Widget _manageRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Row(
+          children: [
+            Icon(icon, color: AppColors.black),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: AppColors.black,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _smallInfo(String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.inputFill,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: AppColors.textMuted,
+          fontSize: 12.5,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _softChip(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppColors.black,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: AppColors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+
+  Widget _darkChip(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.white.withOpacity(0.14)),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: AppColors.textOnDark,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+
+  Widget _heroButton({required IconData icon, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(17),
+        ),
+        child: Icon(icon, color: AppColors.black),
+      ),
+    );
+  }
+
+  Widget _heroPill(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: AppColors.black,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+
+  void _darkSheet({
+    required String title,
+    required String subtitle,
+    required Widget child,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final bottom = MediaQuery.of(sheetContext).viewInsets.bottom;
+
+        return Padding(
+          padding: EdgeInsets.only(bottom: bottom),
+          child: Container(
+            margin: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 22),
+            decoration: BoxDecoration(
+              color: AppColors.black,
+              borderRadius: BorderRadius.circular(36),
+            ),
+            child: SafeArea(
+              top: false,
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: AppColors.textOnDark,
+                      fontSize: 26,
+                      height: 1,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.9,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: AppColors.textDisabled,
+                      fontSize: 13,
+                      height: 1.3,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  child,
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _lightButton({required String text, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: AppColors.black,
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _dangerButton({required String text, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.error,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: AppColors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatTime(TimeOfDay time) {
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  String _timeRangeText() {
+    return '${_formatTime(currentDeal.startTime)}–${_formatTime(currentDeal.endTime)}';
+  }
+
+  String _weekdayShort(int weekday) {
+    switch (weekday) {
+      case 1:
+        return 'Mo';
+      case 2:
+        return 'Di';
+      case 3:
+        return 'Mi';
+      case 4:
+        return 'Do';
+      case 5:
+        return 'Fr';
+      case 6:
+        return 'Sa';
+      case 7:
+        return 'So';
+      default:
+        return '?';
+    }
+  }
+
+  String _weekdayLongList() {
+    final days = [...currentDeal.selectedWeekdays]..sort();
+
+    if (days.length == 7) return 'Jeden Tag';
+    if (days.isEmpty) return 'Keine Tage';
+
+    return days.map(_weekdayShort).join(', ');
+  }
+
+  void _showMessage(String text, {bool error = false}) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(text),
+          backgroundColor: error ? AppColors.error : AppColors.black,
+        ),
+      );
   }
 }
